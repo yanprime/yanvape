@@ -1,5 +1,4 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 repeat task.wait() until game:IsLoaded()
 if shared.vape then shared.vape:Uninject() end
 
@@ -12,6 +11,14 @@ end
 local args = ...
 if type(args) == "table" and args.Username then
     shared.ValidatedUsername = args.Username
+end
+
+if type(args) == "table" and args.Closet then
+    getgenv().Closet = true
+else
+    if getgenv().Closet == nil then
+        getgenv().Closet = false
+    end
 end
 
 local vape
@@ -58,6 +65,7 @@ local function finishLoading()
     vape:Clean(playersService.LocalPlayer.OnTeleport:Connect(function()
         if (not teleportedServers) and (not shared.VapeIndependent) then
             teleportedServers = true
+            vape:Uninject()  
             local teleportScript = [[
                 shared.vapereload = true
                 if shared.VapeDeveloper then
@@ -97,6 +105,27 @@ end
 
 vape = loadstring(downloadFile('newvape/guis/' .. gui .. '.lua'), 'gui')()
 shared.vape = vape
+
+if getgenv().Closet then
+    local LogService = cloneref(game:GetService('LogService'))
+    local originals = {}
+    local function hook(funcName)
+        if typeof(getgenv()[funcName]) == 'function' then
+            local original = hookfunction(getgenv()[funcName], function() end)
+            originals[funcName] = original
+        end
+    end
+    hook('print')
+    hook('warn')
+    hook('error')
+    hook('info')
+    pcall(function() LogService:ClearOutput() end)
+    local conn = LogService.MessageOut:Connect(function()
+        LogService:ClearOutput()
+    end)
+    getgenv()._vape_log_connection = conn
+    getgenv()._vape_originals = originals
+end
 
 if not shared.VapeIndependent then
     loadstring(downloadFile('newvape/games/universal.lua'), 'universal')()
