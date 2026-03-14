@@ -4870,7 +4870,8 @@ run(function()
     local MobileButtons
     local FlyAnywayProgressBar = {Enabled = false}
     local FlyAnywayProgressBarFrame
-	local rayCheck = cloneRaycast()
+    local rayCheck = RaycastParams.new()
+    rayCheck.RespectCanCollide = true
     local up, down, old = 0, 0
     local mobileControls = {}
     local groundtime = nil
@@ -5102,6 +5103,7 @@ run(function()
                     end
                 end))
 
+                local isMobile = inputService.TouchEnabled and not inputService.KeyboardEnabled and not inputService.MouseEnabled
                 local MobileEnabled = MobileButtons.Enabled or isMobile
                 if MobileEnabled then
                     local gui = Instance.new("ScreenGui")
