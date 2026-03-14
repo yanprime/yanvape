@@ -18962,9 +18962,38 @@ run(function()
 			processing[plr.UserId] = nil
 			return
 		end
+		local function spectatorFunction(plr)
+			if detectedPlayers[plr.UserId] then return end
+			if not vape.Loaded then
+				repeat task.wait() until vape.Loaded
+			end
+			local duration = AlertDuration.Value
+			local playerName = plr.Name
+			local playerId = plr.UserId
+			detectedPlayers[playerId] = {
+				name = playerName,
+				checktype = 'spectator',
+				detectedTime = tick()
+			}
+			local alertMsg = 'Spectator: ' .. playerName .. ' (' .. tostring(playerId) .. ') [Has you added]'
+			notif('StaffDetector', alertMsg, duration, 'warning')
+		end
+
 		local function checkJoin()
 			if not plr:GetAttribute('Team') and plr:GetAttribute('Spectator') and not bedwars.Store:getState().Game.customMatch then
-				staffFunction(plr, 'impossible_join')
+				local isFriend = false
+				local suc, result = pcall(function()
+					return lplr:IsFriendsWith(plr.UserId)
+				end)
+				if suc then
+					isFriend = result
+				end
+
+				if isFriend then
+					spectatorFunction(plr)
+				else
+					staffFunction(plr, 'impossible_join')
+				end
 				return true
 			end
 			return false
