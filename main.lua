@@ -1,7 +1,4 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 repeat task.wait() until game:IsLoaded()
 if shared.vape then shared.vape:Uninject() end
 
@@ -43,13 +40,26 @@ local cloneref = cloneref or function(obj)
 	return obj
 end
 local playersService = cloneref(game:GetService('Players'))
-
 local function compileTable(tab)
-    local json = '{'
-    for i, v in tab do
-        json = `{json}\n    {i} = {typeof(v) == 'string' and '"'.. v.. '"' or v},`
+    local parts = {}
+    for k, v in pairs(tab) do
+        local keyStr
+        if type(k) == "string" and k:match("^[%a_][%w_]*$") then
+            keyStr = k
+        else
+            keyStr = "[" .. tostring(k) .. "]"
+        end
+        local valueStr
+        if type(v) == "string" then
+            valueStr = '"' .. v:gsub('"', '\\"') .. '"'
+        elseif type(v) == "number" or type(v) == "boolean" then
+            valueStr = tostring(v)
+        else
+            valueStr = "nil"
+        end
+        table.insert(parts, keyStr .. " = " .. valueStr)
     end
-    return `{json}\n}`
+    return "{" .. table.concat(parts, ", ") .. "}"
 end
 
 local function downloadFile(path, func)
