@@ -5628,7 +5628,7 @@ run(function()
 
                         if Targets.Players.Enabled then
                             local playerTargets = entitylib.AllPosition({
-                                Range = SwingRange.Value,
+                                Range = AttackRange.Value,
                                 Wallcheck = false,
                                 Part = 'RootPart',
                                 Players = true,
@@ -5643,7 +5643,7 @@ run(function()
 
                         if Targets.NPCs.Enabled then
                             local npcTargets = entitylib.AllPosition({
-                                Range = SwingRange.Value,
+                                Range = AttackRange.Value,
                                 Wallcheck = false,
                                 Part = 'RootPart',
                                 Players = false,
