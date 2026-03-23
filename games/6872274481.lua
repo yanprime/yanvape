@@ -7467,6 +7467,9 @@ run(function()
 	local AeroPAChargePercent
 	local RandomHeadPercent
 	local RandomTorsoPercent
+	local CustomPrediction
+	local HorizontalMultiplier
+	local VerticalMultiplier
 	local rayCheck = RaycastParams.new()
 	rayCheck.FilterType = Enum.RaycastFilterType.Include
 	rayCheck.FilterDescendantsInstances = {workspace:FindFirstChild('Map')}
@@ -7660,6 +7663,15 @@ run(function()
 					end
 
 					local targetVelocity = targetBodyPart.Velocity
+					if CustomPrediction and CustomPrediction.Enabled then
+						local hMult = (HorizontalMultiplier and HorizontalMultiplier.Value or 100) / 100
+						local vMult = (VerticalMultiplier and VerticalMultiplier.Value or 100) / 100
+						targetVelocity = Vector3.new(
+							targetVelocity.X * hMult,
+							targetVelocity.Y * vMult,
+							targetVelocity.Z * hMult
+						)
+					end
 					local bowRelX = bedwars.BowConstantsTable.RelX or 0
 					local bowRelY = bedwars.BowConstantsTable.RelY or 0
 					local bowRelZ = bedwars.BowConstantsTable.RelZ or 0
@@ -7804,6 +7816,42 @@ run(function()
 		TargetPart:AddHook(updateRandomizeVisibility)
 	end
 	updateRandomizeVisibility()
+
+	CustomPrediction = ProjectileAimbot:CreateToggle({
+		Name = 'Custom Prediction',
+		Default = false,
+		Tooltip = 'Enable to customize horizontal/vertical prediction multipliers',
+		Function = function()
+			if HorizontalMultiplier then
+				HorizontalMultiplier.Object.Visible = CustomPrediction.Enabled
+			end
+			if VerticalMultiplier then
+				VerticalMultiplier.Object.Visible = CustomPrediction.Enabled
+			end
+		end
+	})
+
+	HorizontalMultiplier = ProjectileAimbot:CreateSlider({
+		Name = 'Horizontal Multiplier',
+		Min = 0,
+		Max = 200,
+		Default = 100,
+		Suffix = '%',
+		Darker = true,
+		Visible = false,
+		Tooltip = 'Adjust horizontal prediction strength (0% = none, 100% = normal, 200% = double)'
+	})
+
+	VerticalMultiplier = ProjectileAimbot:CreateSlider({
+		Name = 'Vertical Multiplier',
+		Min = 0,
+		Max = 200,
+		Default = 100,
+		Suffix = '%',
+		Darker = true,
+		Visible = false,
+		Tooltip = 'Adjust vertical prediction strength (0% = none, 100% = normal, 200% = double)'
+	})
 end)
 
 run(function()
@@ -35578,7 +35626,7 @@ run(function()
 		end
 	end
 	
-	AutoHonor = vape.Categories.Minigames:CreateModule({
+	AutoHonor = vape.Categories.AltFarm:CreateModule({
 		Name = "AutoHonor",
 		Function = function(callback)
 			if callback then
