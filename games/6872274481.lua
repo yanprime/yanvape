@@ -7588,10 +7588,9 @@ run(function()
 			if distSq > rangeSq then continue end
 
 			if maxAngle < 360 then
-				local flatDelta = Vector3.new(delta.X, 0, delta.Z)
-				local facing = entitylib.character.RootPart.CFrame.LookVector * Vector3.new(1, 0, 1)
-				if flatDelta.Magnitude > 0.001 then
-					local dot = facing:Dot(flatDelta.Unit)
+				local facing = gameCamera.CFrame.LookVector
+				if delta.Magnitude > 0.001 then
+					local dot = facing:Dot(delta.Unit)
 					if dot < fovThreshold then continue end
 				end
 			end
@@ -7599,6 +7598,14 @@ run(function()
 			if Targets.Walls.Enabled then
 				local ray = workspace:Raycast(originPos, delta, rayCheck)
 				if ray then continue end
+			end
+
+			if sortMethod == "Cursor" then
+				local mousePos = inputService:GetMouseLocation()
+				local screenPos, onScreen = gameCamera:WorldToScreenPoint(ent.RootPart.Position)
+				if not onScreen then continue end
+				local screenDist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+				if screenDist > 75 then continue end
 			end
 
 			table.insert(valid, {Entity = ent})
