@@ -7074,7 +7074,7 @@ run(function()
 		end
 	end
 	
-	Atmosphere = vape.Categories.Legit:CreateModule({
+	Atmosphere = vape.Legit:CreateModule({
 		Name = 'Atmosphere',
 		Function = function(callback)
 			if callback then
@@ -7167,7 +7167,7 @@ run(function()
 	local FadeOut
 	local trail, point, point2
 	
-	Breadcrumbs = vape.Categories.Legit:CreateModule({
+	Breadcrumbs = vape.Legit:CreateModule({
 		Name = 'Breadcrumbs',
 		Function = function(callback)
 			if callback then
@@ -7284,7 +7284,7 @@ run(function()
 		motor.Parent = part
 	end
 	
-	Cape = vape.Categories.Legit:CreateModule({
+	Cape = vape.Legit:CreateModule({
 		Name = 'Cape',
 		Function = function(callback)
 			if callback then
@@ -7351,7 +7351,7 @@ run(function()
 	local Color
 	local hat
 	
-	ChinaHat = vape.Categories.Legit:CreateModule({
+	ChinaHat = vape.Legit:CreateModule({
 		Name = 'China Hat',
 		Function = function(callback)
 			if callback then
@@ -7430,7 +7430,7 @@ run(function()
 	local TwentyFourHour
 	local label
 	
-	Clock = vape.Categories.Legit:CreateModule({
+	Clock = vape.Legit:CreateModule({
 		Name = 'Clock',
 		Function = function(callback)
 			if callback then
@@ -7682,7 +7682,7 @@ run(function()
 	local Value
 	local oldfov
 	
-	FOV = vape.Categories.Legit:CreateModule({
+	FOV = vape.Legit:CreateModule({
 		Name = 'FOV',
 		Function = function(callback)
 			if callback then
@@ -7712,7 +7712,7 @@ run(function()
 	local FPS
 	local label
 	
-	FPS = vape.Categories.Legit:CreateModule({
+	FPS = vape.Legit:CreateModule({
 		Name = 'FPS',
 		Function = function(callback)
 			if callback then
@@ -7800,7 +7800,7 @@ run(function()
 		keys[keybutton] = {Key = key}
 	end
 	
-	Keystrokes = vape.Categories.Legit:CreateModule({
+	Keystrokes = vape.Legit:CreateModule({
 		Name = 'Keystrokes',
 		Function = function(callback)
 			if callback then
@@ -7905,7 +7905,7 @@ run(function()
 	local Memory
 	local label
 	
-	Memory = vape.Categories.Legit:CreateModule({
+	Memory = vape.Legit:CreateModule({
 		Name = 'Memory',
 		Function = function(callback)
 			if callback then
@@ -7952,7 +7952,7 @@ run(function()
 	local Ping
 	local label
 	
-	Ping = vape.Categories.Legit:CreateModule({
+	Ping = vape.Legit:CreateModule({
 		Name = 'Ping',
 		Function = function(callback)
 			if callback then
@@ -8042,7 +8042,7 @@ run(function()
 		end
 	end
 	
-	SongBeats = vape.Categories.Legit:CreateModule({
+	SongBeats = vape.Legit:CreateModule({
 		Name = 'Song Beats',
 		Function = function(callback)
 			if callback then
@@ -8122,7 +8122,7 @@ run(function()
 	local Speedmeter
 	local label
 	
-	Speedmeter = vape.Categories.Legit:CreateModule({
+	Speedmeter = vape.Legit:CreateModule({
 		Name = 'Speedmeter',
 		Function = function(callback)
 			if callback then
@@ -8172,7 +8172,7 @@ run(function()
 	local Value
 	local old
 	
-	TimeChanger = vape.Categories.Legit:CreateModule({
+	TimeChanger = vape.Legit:CreateModule({
 		Name = 'Time Changer',
 		Function = function(callback)
 			if callback then
@@ -8231,7 +8231,7 @@ run(function()
 	local FFlag
 	local FFlag 
 	local Value
-	FFlag = vape.Categories.Legit:CreateModule({
+	FFlag = vape.Legit:CreateModule({
 		Name = "FFlag",
 		Function = function(callback)
 			if not callback then return end
