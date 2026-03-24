@@ -1,5 +1,4 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local run = function(func)
     local ok, err = pcall(func)
     if not ok then
@@ -2955,7 +2954,9 @@ run(function()
             Name = 'Place Blocks',
             Default = false,
             Function = function(callback)
-                if BlockCPS.Object then BlockCPS.Object.Visible = callback end
+                task.defer(function()
+                    if BlockCPS and BlockCPS.Object then BlockCPS.Object.Visible = callback end
+                end)
             end
         })
 
@@ -5171,6 +5172,7 @@ run(function()
     local ParticleColor2
     local ParticleSize
     local Face
+    local FaceSpeed
     local Animation
     local AnimationMode
     local AnimationSpeed
@@ -5944,8 +5946,13 @@ run(function()
                     end)
 
                     if Face.Enabled and attacked[1] then
-                        local vec = attacked[1].Entity.RootPart.Position * Vector3.new(1, 0, 1)
-                        entitylib.character.RootPart.CFrame = CFrame.lookAt(entitylib.character.RootPart.Position, Vector3.new(vec.X, entitylib.character.RootPart.Position.Y + 0.001, vec.Z))
+                        if true then
+                            local vec = attacked[1].Entity.RootPart.Position * Vector3.new(1, 0, 1)
+                            local targetCFrame = CFrame.lookAt(entitylib.character.RootPart.Position, Vector3.new(vec.X, entitylib.character.RootPart.Position.Y + 0.001, vec.Z))
+                            local speed = FaceSpeed and FaceSpeed.Value or 15
+                            local alpha = math.clamp(speed / 100, 0.01, 1)
+                            entitylib.character.RootPart.CFrame = entitylib.character.RootPart.CFrame:Lerp(targetCFrame, alpha)
+                        end
                     end
                     pcall(function() if RangeCirclePart ~= nil then RangeCirclePart.Parent = gameCamera end end)
 
@@ -6256,7 +6263,23 @@ run(function()
         Darker = true,
         Visible = false
     })
-    Face = Killaura:CreateToggle({Name = 'Face target'})
+    Face = Killaura:CreateToggle({
+        Name = 'Face target',
+        Function = function(callback)
+            if FaceSpeed then FaceSpeed.Object.Visible = callback end
+        end
+    })
+
+    FaceSpeed = Killaura:CreateSlider({
+        Name = 'Face Speed',
+        Min = 1,
+        Max = 100,
+        Default = 15,
+        Decimal = 10,
+        Darker = true,
+        Visible = false,
+        Tooltip = 'How fast to snap towards target (lower = slower/smoother)'
+    })
     Animation = Killaura:CreateToggle({
         Name = 'Custom Animation',
         Function = function(callback)
@@ -7471,6 +7494,13 @@ run(function()
 	local CustomPrediction
 	local HorizontalMultiplier
 	local VerticalMultiplier
+	local DesirePAWorkMode
+	local DesirePAHideCursor
+	local DesirePACursorViewMode
+	local DesirePACursorLimitBow
+	local DesirePACursorShowGUI
+	local cursorRenderConnection
+	local lastGUIState = false
 	local rayCheck = RaycastParams.new()
 	rayCheck.FilterType = Enum.RaycastFilterType.Include
 	rayCheck.FilterDescendantsInstances = {workspace:FindFirstChild('Map')}
@@ -7483,6 +7513,45 @@ run(function()
 	local math_max = math.max
 	local lockedRandomPart = nil
 	local wasHovering = false
+
+	local function hasBowEquipped()
+		if not store.hand or not store.hand.toolType then return false end
+		return store.hand.toolType == 'bow' or store.hand.toolType == 'crossbow'
+	end
+
+	local function shouldHideCursor()
+		if not DesirePAHideCursor or not DesirePAHideCursor.Enabled then return false end
+		if DesirePACursorShowGUI and DesirePACursorShowGUI.Enabled and isGUIOpen() then return false end
+		if DesirePACursorLimitBow and DesirePACursorLimitBow.Enabled and not hasBowEquipped() then return false end
+		local inFirstPerson = isFirstPerson()
+		if DesirePACursorViewMode then
+			if DesirePACursorViewMode.Value == 'First Person' then return inFirstPerson
+			elseif DesirePACursorViewMode.Value == 'Third Person' then return not inFirstPerson
+			end
+		end
+		return true
+	end
+
+	local function updateCursor()
+		pcall(function() inputService.MouseIconEnabled = not shouldHideCursor() end)
+	end
+
+	local function checkGUIState()
+		local currentGUIState = isGUIOpen()
+		if lastGUIState ~= currentGUIState then
+			updateCursor()
+			lastGUIState = currentGUIState
+		end
+	end
+
+	local function shouldPAWork()
+		if not DesirePAWorkMode then return true end
+		local inFirstPerson = isFirstPerson()
+		if DesirePAWorkMode.Value == 'First Person' then return inFirstPerson
+		elseif DesirePAWorkMode.Value == 'Third Person' then return not inFirstPerson
+		end
+		return true
+	end
 
 	local function isBlacklisted(projectileName)
 		if not OtherProjectiles.Enabled then
@@ -7579,8 +7648,15 @@ run(function()
 		Name = 'ProjectileAimbot',
 		Function = function(callback)
 			if callback then
-				old = bedwars.ProjectileController.calculateImportantLaunchValues
-				bedwars.ProjectileController.calculateImportantLaunchValues = function(...)
+					if DesirePAHideCursor and DesirePAHideCursor.Enabled and not cursorRenderConnection then
+						cursorRenderConnection = runService.RenderStepped:Connect(function()
+							checkGUIState()
+							updateCursor()
+						end)
+					end
+
+					old = bedwars.ProjectileController.calculateImportantLaunchValues
+					bedwars.ProjectileController.calculateImportantLaunchValues = function(...)
 					local self, projmeta, worldmeta, origin, shootpos = ...
 					local originPos = entitylib.isAlive and (shootpos or entitylib.character.RootPart.Position) or Vector3.zero
 					if not wasHovering then lockedRandomPart = nil end
@@ -7592,6 +7668,11 @@ run(function()
 					end
 
 					if not plr then
+						wasHovering = false
+						return old(...)
+					end
+
+					if not shouldPAWork() then
 						wasHovering = false
 						return old(...)
 					end
@@ -7721,6 +7802,11 @@ run(function()
 				bedwars.ProjectileController.calculateImportantLaunchValues = old
 				wasHovering = false
 				lockedRandomPart = nil
+				if cursorRenderConnection then
+					cursorRenderConnection:Disconnect()
+					cursorRenderConnection = nil
+				end
+				pcall(function() inputService.MouseIconEnabled = true end)
 			end
 		end,
 		Tooltip = 'Silently adjusts your aim towards the enemy'
@@ -7747,6 +7833,13 @@ run(function()
 		List = {'Distance', 'Damage', 'Threat', 'Kit', 'Health', 'Angle', 'Cursor', 'Forest'},
 		Default = 'Distance',
 		Tooltip = 'Prioritize targets when multiple are in range'
+	})
+
+	DesirePAWorkMode = ProjectileAimbot:CreateDropdown({
+		Name = 'PA Work Mode',
+		List = {'First Person', 'Third Person', 'Both'},
+		Default = 'Both',
+		Tooltip = 'Which perspective the aimbot works in'
 	})
 
 	FOV = ProjectileAimbot:CreateSlider({
@@ -7817,6 +7910,69 @@ run(function()
 		TargetPart:AddHook(updateRandomizeVisibility)
 	end
 	updateRandomizeVisibility()
+
+	DesirePAHideCursor = ProjectileAimbot:CreateToggle({
+		Name = 'Hide Cursor',
+		Default = false,
+		Tooltip = 'Hides the cursor while aiming',
+		Function = function(callback)
+			if DesirePACursorViewMode then DesirePACursorViewMode.Object.Visible = callback end
+			if DesirePACursorLimitBow then DesirePACursorLimitBow.Object.Visible = callback end
+			if DesirePACursorShowGUI then DesirePACursorShowGUI.Object.Visible = callback end
+			if callback and ProjectileAimbot.Enabled then
+				if not cursorRenderConnection then
+					cursorRenderConnection = runService.RenderStepped:Connect(function()
+						checkGUIState()
+						updateCursor()
+					end)
+				end
+				updateCursor()
+			else
+				if cursorRenderConnection then
+					cursorRenderConnection:Disconnect()
+					cursorRenderConnection = nil
+				end
+				pcall(function() inputService.MouseIconEnabled = true end)
+			end
+		end
+	})
+
+	DesirePACursorViewMode = ProjectileAimbot:CreateDropdown({
+		Name = 'Cursor View Mode',
+		List = {'First Person', 'Third Person', 'Both'},
+		Default = 'First Person',
+		Darker = true,
+		Visible = false,
+		Function = function()
+			if ProjectileAimbot.Enabled and DesirePAHideCursor.Enabled then
+				updateCursor()
+			end
+		end
+	})
+
+	DesirePACursorLimitBow = ProjectileAimbot:CreateToggle({
+		Name = 'Limit to Bow',
+		Darker = true,
+		Visible = false,
+		Tooltip = 'Only hides cursor when bow/crossbow is equipped',
+		Function = function()
+			if ProjectileAimbot.Enabled and DesirePAHideCursor.Enabled then
+				updateCursor()
+			end
+		end
+	})
+
+	DesirePACursorShowGUI = ProjectileAimbot:CreateToggle({
+		Name = 'Show on GUI',
+		Darker = true,
+		Visible = false,
+		Tooltip = 'Shows cursor when a GUI is open',
+		Function = function()
+			if ProjectileAimbot.Enabled and DesirePAHideCursor.Enabled then
+				updateCursor()
+			end
+		end
+	})
 
 	CustomPrediction = ProjectileAimbot:CreateToggle({
 		Name = 'Custom Prediction',
@@ -11525,7 +11681,7 @@ run(function()
 							Players = Targets.Players.Enabled,
 							NPCs = Targets.NPCs.Enabled,
 							Wallcheck = Targets.Walls.Enabled,
-							Sort = sortmethods.Health
+							Sort = sortmethods.Distance
 						})
 						if plr then shouldAscend = true end
 					end
@@ -11605,12 +11761,12 @@ run(function()
 
 				if bedwars.AbilityController:canUseAbility('cactus_fire') then
 					local plr = entitylib.EntityPosition({
-						Range = Legit.Enabled and 18 or 40,
+						Range = Legit.Enabled and 8 or 18,
 						Part = 'RootPart',
 						Players = Targets.Players.Enabled,
 						NPCs = Targets.NPCs.Enabled,
 						Wallcheck = Targets.Walls.Enabled,
-						Sort = sortmethods.Health
+						Sort = sortmethods.Distance
 					})
 
 					if plr then
@@ -11636,7 +11792,7 @@ run(function()
 						Players = Targets.Players.Enabled,
 						NPCs = Targets.NPCs.Enabled,
 						Wallcheck = Targets.Walls.Enabled,
-						Sort = sortmethods.Health
+						Sort = sortmethods.Distance
 					})
 
 					if plr then
@@ -11725,7 +11881,7 @@ run(function()
 					Players = Targets.Players.Enabled,
 					NPCs = Targets.NPCs.Enabled,
 					Wallcheck = Targets.Walls.Enabled,
-					Sort = sortmethods.Health
+					Sort = sortmethods.Distance
 				})
 
 				if plr and Legit.Enabled and (entitylib.character.RootPart.Position - plr.RootPart.Position).Magnitude > 23 then
@@ -14337,6 +14493,30 @@ run(function()
 		local myTeam = lplr:GetAttribute('Team')
 		if not chestTeam or not myTeam then return true end
 		return chestTeam ~= myTeam
+	end
+
+	local function getChestTeam(chestPart)
+		local beds = collectionService:GetTagged('bed')
+		local closestTeam = nil
+		local closestDist = math.huge
+		for _, bed in ipairs(beds) do
+			if bed.Parent then
+				local dist = (bed.Position - chestPart.Position).Magnitude
+				if dist < closestDist then
+					closestDist = dist
+					closestTeam = bed:GetAttribute('TeamID')
+				end
+			end
+		end
+		return closestTeam
+	end
+
+	local function isMyChest(chestPart)
+		local myTeam = lplr:GetAttribute('Team')
+		if not myTeam then return false end
+		local chestTeam = getChestTeam(chestPart)
+		if not chestTeam then return false end
+		return chestTeam == myTeam
 	end
 
 	local function handleState()
@@ -20616,16 +20796,16 @@ run(function()
 			
 			for _, part in character:GetDescendants() do
 				if part:IsA("BasePart") then
-					table.insert(charParts, part)
+					table.insert(charParts, {part = part, origCollide = part.CanCollide, origQuery = part.CanQuery})
 					part.CanCollide = false
 					part.CanQuery = false
 				end
 			end
 		else
-			for _, part in charParts do
-				if part and part.Parent then
-					part.CanCollide = false
-					part.CanQuery = false
+			for _, entry in charParts do
+				if entry.part and entry.part.Parent then
+					entry.part.CanCollide = false
+					entry.part.CanQuery = false
 				end
 			end
 		end
@@ -20636,17 +20816,10 @@ run(function()
 		
 		local charParts = trackedParts[character]
 		if charParts then
-			for _, part in charParts do
-				if part and part.Parent then
-					part.CanCollide = true
-					part.CanQuery = true
-				end
-			end
-		else
-			for _, part in character:GetDescendants() do
-				if part:IsA("BasePart") then
-					part.CanCollide = true
-					part.CanQuery = true
+			for _, entry in charParts do
+				if entry.part and entry.part.Parent then
+					entry.part.CanCollide = entry.origCollide
+					entry.part.CanQuery = entry.origQuery
 				end
 			end
 		end
@@ -22097,6 +22270,8 @@ run(function()
 				local lastThrowTime = 0
 				local throwCooldown = 0.3
 				local pearlTriggered = false
+				local pearlCountAtFallStart = nil
+				local manualThrowTime = nil
 
 				local voidRayParams = RaycastParams.new()
 				voidRayParams.FilterType = Enum.RaycastFilterType.Blacklist
@@ -22114,7 +22289,22 @@ run(function()
 						local isJumping = velY > 5
 						local noGroundBelow = not workspace:Raycast(root.Position, Vector3.new(0, -120, 0), voidRayParams)
 
-						if pearl and falling and noGroundBelow and not isJumping then
+						if not falling then
+							pearlCountAtFallStart = nil
+							manualThrowTime = nil
+						elseif falling and pearlCountAtFallStart == nil then
+							pearlCountAtFallStart = pearl and pearl.amount or 0
+						end
+
+						local currentPearlCount = pearl and pearl.amount or 0
+						if pearlCountAtFallStart ~= nil and currentPearlCount < pearlCountAtFallStart and not pearlTriggered then
+							manualThrowTime = currentTime
+							pearlCountAtFallStart = currentPearlCount
+						end
+
+						local blockedByManual = manualThrowTime and (currentTime - manualThrowTime) < 3
+
+						if pearl and falling and noGroundBelow and not isJumping and not blockedByManual then
 							if not pearlTriggered and (currentTime - lastThrowTime) >= throwCooldown then
 								pearlTriggered = true
 								lastThrowTime = currentTime
@@ -27355,7 +27545,7 @@ run(function()
                                         Players = Targets.Players.Enabled,
                                         NPCs = Targets.NPCs.Enabled,
                                         Wallcheck = Targets.Walls.Enabled,
-                                        Sort = sortmethods.Health
+                                        Sort = sortmethods.Distance
                                     })
 
                                     if plr and plr.RootPart and (plr.RootPart.Position - entitylib.character.RootPart.Position).Magnitude <= AbilityRange.Value then
@@ -29794,450 +29984,6 @@ run(function()
             end
         end
     })
-end)
-
-run(function()
-	local CannonReskin
-	local Players = playersService
-	local RunService = runService
-	local LocalPlayer = Players.LocalPlayer
-	
-	local CANNON_SKINS = {
-		Nightmare = "cannon_nightmare_victorious",
-		Diamond = "cannon_diamond_victorious",
-		Emerald = "cannon_emerald_victorious"
-	}
-	
-	local CANNON_SOUNDS = {
-		Nightmare = "CANNON_FIRE_VICTORIOUS_NIGHTMARE",
-		Diamond = "CANNON_FIRE_VICTORIOUS_DIAMOND",
-		Emerald = "CANNON_FIRE_VICTORIOUS_EMERALD"
-	}
-	
-	local CURRENT_SKIN = "Nightmare"
-	
-	local hooked = false
-	local oldFire
-	local oldLaunch
-	
-	local function getReskinSource()
-		return game.ReplicatedStorage
-			:WaitForChild("Assets")
-			:WaitForChild("Blocks")
-			:WaitForChild(CANNON_SKINS[CURRENT_SKIN])
-	end
-	
-	local TARGET_NAME = "cannon"
-	
-	local OFFSET_HELD = CFrame.new(0, 0, 0) * CFrame.Angles(math.rad(0), math.rad(0), math.rad(0))
-	local OFFSET_PLACED = CFrame.new(0, -1.0, 0) * CFrame.Angles(math.rad(0), math.rad(0), math.rad(0))
-	
-	local tagged = setmetatable({}, { __mode = "k" })
-	local connections = {}
-	local renderConnections = {}
-	
-	local function firstBasePart(root)
-		for _, d in ipairs(root:GetDescendants()) do
-			if d:IsA("BasePart") then
-				return d
-			end
-		end
-		return nil
-	end
-	
-	local function makeLocalInvisible(root)
-		for _, d in ipairs(root:GetDescendants()) do
-			if d:IsA("BasePart") then
-				d.LocalTransparencyModifier = 1
-				d.Transparency = 1
-			elseif d:IsA("Decal") or d:IsA("Texture") then
-				d.Transparency = 1
-			end
-		end
-	end
-	
-	local function restoreVisibility(root)
-		for _, d in ipairs(root:GetDescendants()) do
-			if d:IsA("BasePart") then
-				d.LocalTransparencyModifier = 0
-				d.Transparency = 0
-			elseif d:IsA("Decal") or d:IsA("Texture") then
-				d.Transparency = 0
-			end
-		end
-	end
-	
-	local function setNoCollide(model)
-		for _, d in ipairs(model:GetDescendants()) do
-			if d:IsA("BasePart") then
-				d.CanCollide = false
-				d.CanTouch = false
-				d.CanQuery = false
-				d.Massless = true
-				d.Anchored = false
-			end
-		end
-	end
-	
-	local function weldAllToPrimary(model)
-		local primary = model.PrimaryPart
-		if not primary then return end
-		
-		for _, d in ipairs(model:GetDescendants()) do
-			if d:IsA("BasePart") and d ~= primary then
-				local wc = Instance.new("WeldConstraint")
-				wc.Part0 = primary
-				wc.Part1 = d
-				wc.Parent = primary
-			end
-		end
-	end
-	
-	local function weldModelToPart(model, targetPart)
-		if not model.PrimaryPart then
-			local p = firstBasePart(model)
-			if p then
-				pcall(function() model.PrimaryPart = p end)
-			end
-		end
-		if not model.PrimaryPart then return false end
-		
-		setNoCollide(model)
-		
-		pcall(function()
-			model:PivotTo(targetPart.CFrame * OFFSET_HELD)
-		end)
-		
-		weldAllToPrimary(model)
-		
-		local wc = Instance.new("WeldConstraint")
-		wc.Part0 = targetPart
-		wc.Part1 = model.PrimaryPart
-		wc.Parent = model.PrimaryPart
-		
-		return true
-	end
-	
-	local function attachReskinTo(targetRoot, offset)
-		if not targetRoot or tagged[targetRoot] then return end
-		tagged[targetRoot] = true
-		
-		local targetPart = targetRoot:FindFirstChild("Handle")
-		if not (targetPart and targetPart:IsA("BasePart")) then
-			targetPart = firstBasePart(targetRoot)
-		end
-		if not targetPart then
-			tagged[targetRoot] = nil
-			return
-		end
-		
-		makeLocalInvisible(targetRoot)
-		
-		local RESKIN_SOURCE = getReskinSource()
-		local clone = RESKIN_SOURCE:Clone()
-		clone.Name = "LOCAL_CANNON_RESKIN"
-		
-		if clone:IsA("Model") then
-			if not clone.PrimaryPart then
-				local p = firstBasePart(clone)
-				if p then
-					pcall(function() clone.PrimaryPart = p end)
-				end
-			end
-			if not clone.PrimaryPart then
-				clone:Destroy()
-				tagged[targetRoot] = nil
-				return
-			end
-			
-			setNoCollide(clone)
-			clone.Parent = targetRoot
-			
-			pcall(function()
-				clone:PivotTo(targetPart.CFrame * offset)
-			end)
-			
-			weldAllToPrimary(clone)
-			
-			local wcMain = Instance.new("WeldConstraint")
-			wcMain.Part0 = targetPart
-			wcMain.Part1 = clone.PrimaryPart
-			wcMain.Parent = clone.PrimaryPart
-		else
-			clone.Parent = targetRoot
-		end
-	end
-	
-	local function hookViewmodel()
-		local cam = workspace.CurrentCamera
-		if not cam then return end
-		
-		local function hookVM(vm)
-			for _, child in ipairs(vm:GetChildren()) do
-				if child.Name == TARGET_NAME then
-					attachReskinTo(child, OFFSET_HELD)
-				end
-			end
-			
-			local conn = vm.ChildAdded:Connect(function(child)
-				if child.Name == TARGET_NAME then
-					task.wait()
-					attachReskinTo(child, OFFSET_HELD)
-				end
-			end)
-			table.insert(connections, conn)
-		end
-		
-		local vm = cam:FindFirstChild("Viewmodel")
-		if vm then hookVM(vm) end
-		
-		local conn = cam.ChildAdded:Connect(function(child)
-			if child.Name == "Viewmodel" then
-				task.wait()
-				hookVM(child)
-			end
-		end)
-		table.insert(connections, conn)
-	end
-	
-	local function hookThirdPersonInHand(character)
-		local function onChildAdded(child)
-			if child:IsA("Tool") and child.Name == TARGET_NAME then
-				task.wait()
-				
-				local handle = child:FindFirstChild("Handle")
-				if not (handle and handle:IsA("BasePart")) then
-					handle = firstBasePart(child)
-				end
-				if not handle then return end
-				
-				local existing = child:FindFirstChild("LOCAL_CANNON_RESKIN")
-				if existing then
-					existing:Destroy()
-				end
-				
-				local RESKIN_SOURCE = getReskinSource()
-				local reskin = RESKIN_SOURCE:Clone()
-				reskin.Name = "LOCAL_CANNON_RESKIN"
-				reskin.Parent = child
-				
-				if reskin:IsA("Model") then
-					weldModelToPart(reskin, handle)
-				end
-				
-				local start = time()
-				local conn
-				conn = RunService.RenderStepped:Connect(function()
-					if not child.Parent then
-						conn:Disconnect()
-						return
-					end
-					
-					makeLocalInvisible(child)
-					
-					if reskin and reskin.Parent and reskin:IsA("Model") and reskin.PrimaryPart then
-						pcall(function()
-							reskin:PivotTo(handle.CFrame * OFFSET_HELD)
-						end)
-					end
-					
-					if time() - start > 2 then
-						conn:Disconnect()
-					end
-				end)
-				table.insert(renderConnections, conn)
-			end
-		end
-		
-		for _, c in ipairs(character:GetChildren()) do
-			onChildAdded(c)
-		end
-		
-		local conn = character.ChildAdded:Connect(onChildAdded)
-		table.insert(connections, conn)
-	end
-	
-	local function hookTools(container)
-		for _, child in ipairs(container:GetChildren()) do
-			if child:IsA("Tool") and child.Name == TARGET_NAME then
-				attachReskinTo(child, OFFSET_HELD)
-			end
-		end
-		
-		local conn = container.ChildAdded:Connect(function(child)
-			if child:IsA("Tool") and child.Name == TARGET_NAME then
-				task.wait()
-				attachReskinTo(child, OFFSET_HELD)
-			end
-		end)
-		table.insert(connections, conn)
-	end
-	
-	local function hookBlocksFolder(blocksFolder)
-		for _, child in ipairs(blocksFolder:GetChildren()) do
-			if child.Name == TARGET_NAME then
-				attachReskinTo(child, OFFSET_PLACED)
-			end
-		end
-		
-		local conn = blocksFolder.ChildAdded:Connect(function(child)
-			if child.Name == TARGET_NAME then
-				task.wait()
-				attachReskinTo(child, OFFSET_PLACED)
-				task.wait()
-			end
-		end)
-		table.insert(connections, conn)
-	end
-	
-	local function hookAllWorldBlocks()
-		local map = workspace:FindFirstChild("Map")
-		if not map then return end
-		
-		local worlds = map:FindFirstChild("Worlds")
-		if not worlds then return end
-		
-		for _, world in ipairs(worlds:GetChildren()) do
-			local blocks = world:FindFirstChild("Blocks")
-			if blocks then
-				hookBlocksFolder(blocks)
-			end
-		end
-		
-		local conn = worlds.ChildAdded:Connect(function(world)
-			task.wait()
-			local blocks = world:FindFirstChild("Blocks")
-			if blocks then
-				hookBlocksFolder(blocks)
-			end
-		end)
-		table.insert(connections, conn)
-	end
-	
-	local function onCharacterAdded(character)
-		task.wait(0.2)
-		hookTools(LocalPlayer.Backpack)
-		hookTools(character)
-		hookThirdPersonInHand(character)
-	end
-	
-	local function hookSounds()
-		if hooked then return end
-		hooked = true
-		
-		oldFire = bedwars.CannonHandController.fireCannon
-		oldLaunch = bedwars.CannonHandController.launchSelf
-		
-		bedwars.CannonHandController.fireCannon = function(...)
-			for _, v in ipairs(workspace.SoundPool:GetChildren()) do
-				if v:IsA("Sound") and v.SoundId == "rbxassetid://7121064180" then
-					v:Destroy()
-				end
-			end
-			
-			bedwars.SoundManager:playSound(bedwars.SoundList[CANNON_SOUNDS[CURRENT_SKIN]])
-			return oldFire(...)
-		end
-		
-		bedwars.CannonHandController.launchSelf = function(...)
-			for _, v in ipairs(workspace.SoundPool:GetChildren()) do
-				if v:IsA("Sound") and v.SoundId == "rbxassetid://7121064180" then
-					v:Destroy()
-				end
-			end
-			
-			bedwars.SoundManager:playSound(bedwars.SoundList[CANNON_SOUNDS[CURRENT_SKIN]])
-			return oldLaunch(...)
-		end
-	end
-	
-	local function unhookSounds()
-		if hooked then
-			bedwars.CannonHandController.fireCannon = oldFire
-			bedwars.CannonHandController.launchSelf = oldLaunch
-			oldFire = nil
-			oldLaunch = nil
-			hooked = false
-		end
-	end
-	
-	local function cleanup()
-		for _, conn in pairs(connections) do
-			pcall(function() conn:Disconnect() end)
-		end
-		for _, conn in pairs(renderConnections) do
-			pcall(function() conn:Disconnect() end)
-		end
-		table.clear(connections)
-		table.clear(renderConnections)
-		
-		for targetRoot, _ in pairs(tagged) do
-			if targetRoot and targetRoot.Parent then
-				local reskin = targetRoot:FindFirstChild("LOCAL_CANNON_RESKIN")
-				if reskin then
-					reskin:Destroy()
-				end
-				restoreVisibility(targetRoot)
-			end
-		end
-		table.clear(tagged)
-		
-		local map = workspace:FindFirstChild("Map")
-		if map then
-			local worlds = map:FindFirstChild("Worlds")
-			if worlds then
-				for _, world in ipairs(worlds:GetChildren()) do
-					local blocks = world:FindFirstChild("Blocks")
-					if blocks then
-						for _, child in ipairs(blocks:GetChildren()) do
-							if child.Name == TARGET_NAME then
-								local reskin = child:FindFirstChild("LOCAL_CANNON_RESKIN")
-								if reskin then
-									reskin:Destroy()
-								end
-								restoreVisibility(child)
-							end
-						end
-					end
-				end
-			end
-		end
-		
-		unhookSounds()
-	end
-	
-	CannonReskin = vape.Categories.Render:CreateModule({
-		Name = 'CannonReskin',
-		Function = function(callback)
-			if callback then		
-				hookViewmodel()
-				hookAllWorldBlocks()
-				hookSounds()
-				
-				if LocalPlayer.Character then
-					onCharacterAdded(LocalPlayer.Character)
-				end
-				
-				local charConn = LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
-				table.insert(connections, charConn)
-			else
-				cleanup()
-			end
-		end,
-		Tooltip = 'Reskins cannons with victorious skins (credit to soryed and koli for help!)'
-	})
-	
-	local SkinMode = CannonReskin:CreateDropdown({
-		Name = 'Skin',
-		List = {'Nightmare', 'Diamond', 'Emerald'},
-		Function = function(val)
-			CURRENT_SKIN = val
-			if CannonReskin.Enabled then
-				CannonReskin:Toggle()
-				CannonReskin:Toggle()
-			end
-		end
-	})
 end)
 
 run(function()
@@ -35014,25 +34760,6 @@ run(function()
 		return blocks:FindFirstChild(skinName)
 	end
 
-	local function keepOriginalInvisible(tool)
-		local conn
-		conn = RunService.RenderStepped:Connect(function()
-			if not tool or not tool.Parent then
-				conn:Disconnect()
-				return
-			end
-			for _, d in ipairs(tool:GetDescendants()) do
-				if d:IsA("BasePart") and not d:IsDescendantOf(tool:FindFirstChild("LOCAL_ITEM_RESKIN") or game) then
-					d.LocalTransparencyModifier = 1
-					d.Transparency = 1
-				elseif (d:IsA("Decal") or d:IsA("Texture")) and not d:IsDescendantOf(tool:FindFirstChild("LOCAL_ITEM_RESKIN") or game) then
-					d.Transparency = 1
-				end
-			end
-		end)
-		table.insert(connections, conn)
-	end
-
 	local function getCurrentMappings()
 		local fn = SKIN_DATA[CURRENT_ITEM_SKIN]
 		if not fn then return {} end
@@ -35053,6 +34780,7 @@ run(function()
 
 	local tagged = setmetatable({}, { __mode = "k" })
 	local connections = {}
+	local invisConns = setmetatable({}, { __mode = "k" })
 	local oldGetKitSkin = nil
 	local savedStoreSkins = {}
 
@@ -35113,6 +34841,33 @@ run(function()
 		end
 	end
 
+	local function startInvisibilityEnforcer(tool)
+		if invisConns[tool] then
+			pcall(function() invisConns[tool]:Disconnect() end)
+			invisConns[tool] = nil
+		end
+		local conn
+		conn = RunService.RenderStepped:Connect(function()
+			if not tool or not tool.Parent then
+				conn:Disconnect()
+				invisConns[tool] = nil
+				return
+			end
+			local reskin = tool:FindFirstChild("LOCAL_ITEM_RESKIN")
+			for _, d in ipairs(tool:GetDescendants()) do
+				if reskin and d:IsDescendantOf(reskin) then continue end
+				if d:IsA("BasePart") then
+					d.LocalTransparencyModifier = 1
+					d.Transparency = 1
+				elseif d:IsA("Decal") or d:IsA("Texture") then
+					d.Transparency = 1
+				end
+			end
+		end)
+		invisConns[tool] = conn
+		table.insert(connections, conn)
+	end
+
 	local function attachReskin(tool, skinName)
 		if not tool or tagged[tool] then return end
 		tagged[tool] = true
@@ -35127,7 +34882,6 @@ run(function()
 		if not itemsFolder then tagged[tool] = nil; return end
 		local source = itemsFolder:FindFirstChild(skinName)
 		if not source then tagged[tool] = nil; return end
-
 		makeInvisible(tool)
 
 		local clone = source:Clone()
@@ -35166,6 +34920,7 @@ run(function()
 		w.C0 = SKIN_OFFSETS[skinName] or CFrame.identity
 		w.C1 = CFrame.identity
 		w.Parent = cloneAnchor
+		startInvisibilityEnforcer(tool)
 	end
 
 	local function weldAllToPrimary(model)
@@ -35483,8 +35238,23 @@ run(function()
 		table.insert(connections, container.ChildAdded:Connect(tryApply))
 	end
 
+	local function cleanupDeadTagged()
+		for root in pairs(tagged) do
+			if not root or not root.Parent then
+				tagged[root] = nil
+			end
+		end
+		for tool in pairs(invisConns) do
+			if not tool or not tool.Parent then
+				pcall(function() invisConns[tool]:Disconnect() end)
+				invisConns[tool] = nil
+			end
+		end
+	end
+
 	local function onCharacterAdded(character)
 		task.wait(0.2)
+		cleanupDeadTagged()
 		applyKitSkinHook()
 		if isCannonSkin() then
 			hookCannonContainer(LocalPlayer.Backpack)
@@ -35497,6 +35267,11 @@ run(function()
 	end
 
 	local function cleanup()
+		for tool, conn in pairs(invisConns) do
+			pcall(function() conn:Disconnect() end)
+		end
+		table.clear(invisConns)
+
 		for _, c in pairs(connections) do pcall(function() c:Disconnect() end) end
 		table.clear(connections)
 		for root in pairs(tagged) do
@@ -36612,4 +36387,86 @@ run(function()
 	})
 	Streamer = AutoMushroom:CreateToggle({Name='Streamer Mode'})
 	Animations = AutoMushroom:CreateToggle({Name='Animations',Default=true})
+end)
+
+run(function()
+	local AutoMartin
+	local Targets
+	local Range
+	local Delay
+	local Angle
+
+	AutoMartin = vape.Categories.Kits:CreateModule({
+		Name = 'AutoMartin',
+		Tooltip = 'Automatically fires cactus ability at nearby targets',
+		Function = function(callback)
+			if callback then
+				repeat
+					if not entitylib.isAlive then
+						task.wait(0.1)
+						continue
+					end
+
+					if bedwars.AbilityController:canUseAbility('cactus_fire') then
+						local plr = entitylib.EntityPosition({
+							Range = Range.Value,
+							Part = 'RootPart',
+							Players = Targets.Players.Enabled,
+							NPCs = Targets.NPCs.Enabled,
+							Wallcheck = Targets.Walls.Enabled,
+							Sort = sortmethods.Distance
+						})
+
+						if plr then
+							local selfpos = entitylib.character.RootPart.Position
+							local localfacing = (gameCamera.CFrame.LookVector * Vector3.new(1, 0, 1)).Unit
+							local delta = (plr.RootPart.Position - selfpos) * Vector3.new(1, 0, 1)
+							local angle = math.acos(math.clamp(localfacing:Dot(delta.Unit), -1, 1))
+							if angle > (math.rad(Angle.Value) / 2) then
+								task.wait(0.1)
+								continue
+							end
+							task.wait(Delay.Value)
+							bedwars.AbilityController:useAbility('cactus_fire')
+							task.wait(0.5)
+						end
+					end
+
+					task.wait(0.1)
+				until not AutoMartin.Enabled
+			end
+		end
+	})
+
+	Targets = AutoMartin:CreateTargets({
+		Players = true,
+		Walls = false,
+		NPCs = false
+	})
+
+	Range = AutoMartin:CreateSlider({
+		Name = 'Range',
+		Min = 1,
+		Max = 20,
+		Default = 18,
+		Suffix = function(val)
+			return val == 1 and 'stud' or 'studs'
+		end
+	})
+
+		Angle = AutoMartin:CreateSlider({
+		Name = 'Max Angle',
+		Min = 1,
+		Max = 360,
+		Default = 360,
+	})
+
+	Delay = AutoMartin:CreateSlider({
+		Name = 'Delay',
+		Min = 0,
+		Max = 2,
+		Default = 0,
+		Suffix = 's',
+		Decimal = 10
+	})
 end)
