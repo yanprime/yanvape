@@ -48,6 +48,8 @@ local contextActionService = cloneref(game:GetService('ContextActionService'))
 local guiService = cloneref(game:GetService('GuiService'))
 local coreGui = cloneref(game:GetService('CoreGui'))
 local starterGui = cloneref(game:GetService('StarterGui'))
+local VirtualInputManager = game:GetService("VirtualInputManager")
+
 local isnetworkowner = identifyexecutor and table.find({'AWP', 'Nihon'}, ({identifyexecutor()})[1]) and isnetworkowner or function()
 	return true
 end
@@ -1437,6 +1439,19 @@ run(function()
 			table.clear(entitylib.Connections)
 		end
 
+		if entitylib.PlayerConnections then
+			for _, plrConns in pairs(entitylib.PlayerConnections) do
+				if type(plrConns) == "table" then
+					for _, conn in ipairs(plrConns) do
+						if conn and type(conn) == "userdata" and conn.Connected then
+							conn:Disconnect()
+						end
+					end
+				end
+			end
+			table.clear(entitylib.PlayerConnections)
+		end
+
 		if entitylib.EntityThreads then
 			for char, thread in pairs(entitylib.EntityThreads) do
 				if thread and task.cancel then
@@ -1801,6 +1816,15 @@ local function getPlayerHealthPercent(player)
     local health, maxHealth = getPlayerHealth(player)
     if maxHealth == 0 then return 0 end
     return (health / maxHealth) * 100
+end
+
+
+local function leftClick()
+	pcall(function()
+		VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+		task.wait(0.05)
+		VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+	end)
 end
 
 local projectileRemote
@@ -3716,26 +3740,7 @@ run(function()
 	local task_wait = task.wait
 	local pcall = pcall
 	local lastClickTime = 0
-	local clickCooldown = 0.015
-	
-	local function leftClick()
-		local now = tick()
-		if now - lastClickTime < clickCooldown then
-			return false
-		end
-		
-		local success = pcall(function()
-			VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-			task_wait(0.02)
-			VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-		end)
-		
-		if success then
-			lastClickTime = now
-		end
-		return success
-	end
-	
+	local clickCooldown = 0.015	
 	local lastProjectileCheck = 0
 	local cachedProjectileResult = false
 	local lastHotbarSlot = -1
@@ -4869,16 +4874,16 @@ run(function()
         return false
     end
 
+    local _wallRayParams = RaycastParams.new()
+    _wallRayParams.FilterType = Enum.RaycastFilterType.Exclude
     local function isTargetBehindWall(ent)
         if not Targets or not Targets.Walls or not Targets.Walls.Enabled then return false end
         if not ent.RootPart then return false end
         local origin = entitylib.character.RootPart.Position
         local target = ent.RootPart.Position
         local direction = target - origin
-        local rayParams = RaycastParams.new()
-        rayParams.FilterDescendantsInstances = {entitylib.character, ent.Character}
-        rayParams.FilterType = Enum.RaycastFilterType.Exclude
-        local result = workspace:Raycast(origin, direction, rayParams)
+        _wallRayParams.FilterDescendantsInstances = {entitylib.character, ent.Character}
+        local result = workspace:Raycast(origin, direction, _wallRayParams)
         if result then
             local hitDist = (result.Position - origin).Magnitude
             local targetDist = direction.Magnitude
@@ -5409,14 +5414,6 @@ run(function()
         return false
     end
 
-    local function leftClick()
-        pcall(function()
-            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-            task.wait(0.05)
-            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-        end)
-    end
-
     local function updateInventoryCache()
         local now = tick()
         if now - lastInventoryUpdate < INVENTORY_CACHE_TIME then
@@ -5612,7 +5609,7 @@ run(function()
                     
                     pcall(function()
                         if entitylib.isAlive and entitylib.character.HumanoidRootPart then
-                            TweenService:Create(RangeCirclePart, TweenInfo.new(0.2, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {Position = entitylib.character.HumanoidRootPart.Position - Vector3.new(0, entitylib.character.Humanoid.HipHeight, 0)}):Play()
+                            RangeCirclePart.Position = entitylib.character.HumanoidRootPart.Position - Vector3.new(0, entitylib.character.Humanoid.HipHeight, 0)
                         end
                     end)
 
@@ -7513,6 +7510,9 @@ run(function()
 	local math_max = math.max
 	local lockedRandomPart = nil
 	local wasHovering = false
+	local PAFOVCircle
+	local paFOVCircleDrawing = nil
+	local paFOVCircleConnection = nil
 
 	local function hasBowEquipped()
 		if not store.hand or not store.hand.toolType then return false end
@@ -7817,6 +7817,14 @@ run(function()
 					cursorRenderConnection:Disconnect()
 					cursorRenderConnection = nil
 				end
+				if paFOVCircleConnection then
+					paFOVCircleConnection:Disconnect()
+					paFOVCircleConnection = nil
+				end
+				if paFOVCircleDrawing then
+					paFOVCircleDrawing:Remove()
+					paFOVCircleDrawing = nil
+				end
 				pcall(function() inputService.MouseIconEnabled = true end)
 			end
 		end,
@@ -7853,13 +7861,6 @@ run(function()
 		Tooltip = 'Which perspective the aimbot works in'
 	})
 
-	FOV = ProjectileAimbot:CreateSlider({
-		Name = 'FOV',
-		Min = 1,
-		Max = 1000,
-		Default = 1000
-	})
-
 	Range = ProjectileAimbot:CreateSlider({
 		Name = 'Range',
 		Min = 10,
@@ -7876,19 +7877,44 @@ run(function()
 		Tooltip = 'Bow/frost staff charge percentage (affects damage)'
 	})
 
-	OtherProjectiles = ProjectileAimbot:CreateToggle({
-		Name = 'Other Projectiles',
-		Default = true,
-		Function = function(call)
-			if Blacklist then Blacklist.Object.Visible = call end
-		end
+	FOV = ProjectileAimbot:CreateSlider({
+		Name = 'FOV',
+		Min = 1,
+		Max = 1000,
+		Default = 1000
 	})
 
-	Blacklist = ProjectileAimbot:CreateTextList({
-		Name = 'Blacklist',
-		Darker = true,
-		Default = {'telepearl'},
-		Visible = OtherProjectiles.Enabled
+	PAFOVCircle = ProjectileAimbot:CreateToggle({
+		Name = 'FOV Circle',
+		Tooltip = 'Shows a circle representing your FOV on screen',
+		Function = function(call)
+			if call then
+				paFOVCircleDrawing = Drawing.new('Circle')
+				paFOVCircleDrawing.Visible = true
+				paFOVCircleDrawing.Thickness = 1
+				paFOVCircleDrawing.Color = Color3.fromRGB(255, 255, 255)
+				paFOVCircleDrawing.Filled = false
+				paFOVCircleDrawing.NumSides = 64
+				paFOVCircleConnection = runService.RenderStepped:Connect(function()
+					if paFOVCircleDrawing and FOV and FOV.Value then
+						pcall(function()
+							local vp = gameCamera.ViewportSize
+							paFOVCircleDrawing.Position = Vector2.new(vp.X / 2, vp.Y / 2)
+							paFOVCircleDrawing.Radius = FOV.Value
+						end)
+					end
+				end)
+			else
+				if paFOVCircleConnection then
+					paFOVCircleConnection:Disconnect()
+					paFOVCircleConnection = nil
+				end
+				if paFOVCircleDrawing then
+					paFOVCircleDrawing:Remove()
+					paFOVCircleDrawing = nil
+				end
+			end
+		end
 	})
 
 	RandomHeadPercent = ProjectileAimbot:CreateSlider({
@@ -8019,6 +8045,91 @@ run(function()
 		Visible = false,
 		Tooltip = 'Adjust vertical prediction strength (0% = none, 100% = normal, 200% = double)'
 	})
+
+	OtherProjectiles = ProjectileAimbot:CreateToggle({
+		Name = 'Other Projectiles',
+		Default = true,
+		Function = function(call)
+			if Blacklist then Blacklist.Object.Visible = call end
+		end
+	})
+
+	Blacklist = ProjectileAimbot:CreateTextList({
+		Name = 'Blacklist',
+		Darker = true,
+		Default = {'telepearl'},
+		Visible = OtherProjectiles.Enabled
+	})
+end)
+
+run(function()
+	local TaxRemover
+	local oldDispatch
+	local oldtax
+	local oldadded
+	local olditems
+	local oldhook
+	local oldConnect
+	TaxRemover = vape.Categories.Blatant:CreateModule({
+		Name = "TaxRemover",
+		Function = function(callback)
+			if callback then
+				oldtax = bedwars.ShopTaxController.isTaxed
+				oldadded = bedwars.ShopTaxController.getAddedTax
+				olditems = bedwars.ShopTaxController.getTaxedItems
+				oldDispatch = bedwars.Store.dispatch
+				task.spawn(function()
+					bedwars.Store.dispatch = function(...)
+						local arg = select(2, ...)
+						if arg and typeof(arg) == 'table' and arg.type == 'IncrementTaxState'  then
+							return false
+						end 	
+						return oldDispatch(...)
+					end
+				end)
+				task.spawn(function()
+					bedwars.ShopTaxController.isTaxed = function(...)
+						return false
+					end
+				end)
+				task.spawn(function()
+					bedwars.ShopTaxController.getTaxedItems = function(...)
+						return {}
+					end
+				end)
+				task.spawn(function()
+					bedwars.ShopTaxController.getAddedTax = function(...)
+						return 0
+					end
+				end)
+
+				task.spawn(function()
+					if bedwars.ShopTaxController.taxStateUpdateEvent then
+						oldConnect = bedwars.ShopTaxController.taxStateUpdateEvent.Connect
+						bedwars.ShopTaxController.taxStateUpdateEvent.Connect = function() 
+							return {Disconnect = function() end}
+						end
+					end
+				end)
+				task.spawn(function()
+					bedwars.ShopTaxController.hasTax = false
+					bedwars.ShopTaxController.taxedItems = {}
+					bedwars.ShopTaxController.addedTaxMap = {}
+				end)
+			else
+				bedwars.Store.dispatch = oldDispatch
+				bedwars.ShopTaxController.isTaxed = oldtax
+				bedwars.ShopTaxController.getAddedTax = oldadded
+				bedwars.ShopTaxController.getTaxedItems = olditems
+				bedwars.ShopTaxController.taxStateUpdateEvent.Connect = oldConnect
+				oldDispatch = nil
+				oldtax = nil
+				oldadded = nil
+				olditems = nil
+				oldConnect = nil
+			end
+		end
+	})
 end)
 
 run(function()
@@ -8049,14 +8160,6 @@ run(function()
 	local math_acos = math.acos
 	local math_rad = math.rad
 	local tick = tick
-	
-	local function leftClick()
-		pcall(function()
-			VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-			task.wait(0.05)
-			VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-		end)
-	end
 	
 	local function updateInventoryCache()
 		local now = tick()
@@ -15848,7 +15951,7 @@ run(function()
 					local sizetween = tweenService:Create(self.wrapperRef:getValue(), TweenInfo.new(0.1), {
 						Size = UDim2.fromScale(0.11, 0.005)
 					})
-					local countdowntween = tweenService:Create(self.progressRef:getValue(), TweenInfo.new(self.durationSeconds * (Value.Value / 100), Enum.EasingStyle.Linear), {
+					local countdowntween = tweenService:Create(self.progressRef:getValue(), TweenInfo.new(self.durationSeconds * (Value.Value / 40), Enum.EasingStyle.Linear), {
 						Size = UDim2.fromScale(1, 1)
 					})
 	
@@ -34630,4 +34733,345 @@ run(function()
 		end,
 		Tooltip = 'Removes block textures but keeps colors'
 	})
+end)
+
+run(function()
+	local FrameBuffer
+	local Latency
+	local Rate
+	
+	local defaultFFlags = {
+		DFIntDebugDefaultTargetWorldStepsPerFrame = nil,
+		DFIntMaxMissedWorldStepsRemembered = nil,
+		DFIntWorldStepsOffsetAdjustRate = nil,
+		DFIntDebugSendDistInSteps = nil,
+		DFIntWorldStepMax = nil,
+		DFIntWarpFactor = nil
+	}
+	
+	local function captureDefaults()
+		for name, _ in pairs(defaultFFlags) do
+			local suc, val = pcall(function()
+				return getfflag(name)
+			end)
+			if suc then
+				defaultFFlags[name] = val
+			end
+		end
+	end
+	captureDefaults()
+	
+	local function restoreFFlags()
+		for name, val in pairs(defaultFFlags) do
+			if val then
+				pcall(function()
+					setfflag(name, val)
+				end)
+			end
+		end
+	end
+	
+	local function applyFFlags(latencyMs, rate)
+		rate = math.max(rate, 1)
+		local latency = latencyMs
+		if latency <= 1 then
+			latency = 1.5
+		end
+		
+		local OG = -2147483648
+		local NEW = OG * (latency / 1000)
+		local NEW2 = NEW * -1
+		local str = tostring(NEW)
+		local str2 = tostring(NEW2)
+		
+		pcall(function() setfflag('DFIntDebugDefaultTargetWorldStepsPerFrame', str) end)
+		pcall(function() setfflag('DFIntMaxMissedWorldStepsRemembered', str) end)
+		pcall(function() setfflag('DFIntWorldStepsOffsetAdjustRate', str2) end)
+		pcall(function() setfflag('DFIntDebugSendDistInSteps', str) end)
+		pcall(function() setfflag('DFIntWorldStepMax', str) end)
+		pcall(function() setfflag('DFIntWarpFactor', str2) end)
+	end
+	
+	FrameBuffer = vape.Categories.Blatant:CreateModule({
+		Name = 'FrameBuffer',
+		Function = function(callback)
+			if callback then
+				repeat
+					applyFFlags(Latency.Value, Rate.Value)
+					task.wait(1 / math.max(Rate.Value, 1))
+				until not FrameBuffer.Enabled
+				
+				restoreFFlags()
+			end
+		end,
+	})
+	
+	Latency = FrameBuffer:CreateSlider({
+		Name = "Latency",
+		Min = 0,
+		Max = 1000,
+		Default = 250,
+		Suffix = 'ms'
+	})
+	
+	Rate = FrameBuffer:CreateSlider({
+		Name = "Rate",
+		Min = 1,
+		Max = 360,
+		Default = 60,
+		Suffix = 'hz'
+	})
+end)
+
+run(function()
+	local autoLassyEnabled = false
+	local AutoLassy
+	local AutoLassyInterval
+	local AutoLassySwitchSpeed
+	local AutoLassyWaitDelay
+	local AutoLassyRange
+	local AutoLassyFOV
+	local LassyKillauraTargetCheck
+	local LassyFirstPersonCheck
+	local lastAutoLassyTime = 0
+
+	local _G_lassyLock = false
+
+	local math_acos = math.acos
+	local math_rad = math.rad
+	local tick = tick
+
+	local cachedLassoSlot = nil
+	local cachedSwordSlotL = nil
+	local lastLassyInvUpdate = 0
+	local LASSY_CACHE_TIME = 0.5
+
+	local lastLassyTargetCheck = 0
+	local lastLassyTargetResult = false
+	local LASSY_TARGET_INTERVAL = 0.15
+
+	local function updateLassyCache()
+		local now = tick()
+		if now - lastLassyInvUpdate < LASSY_CACHE_TIME then return end
+		lastLassyInvUpdate = now
+
+		cachedLassoSlot = nil
+		cachedSwordSlotL = nil
+
+		local hotbar = store.inventory.hotbar
+		for i = 1, #hotbar do
+			local v = hotbar[i]
+			if v.item and v.item.itemType then
+				if v.item.itemType == 'lasso' and not cachedLassoSlot then
+					cachedLassoSlot = i - 1
+				end
+				local itemMeta = bedwars.ItemMeta[v.item.itemType]
+				if itemMeta and itemMeta.sword and not cachedSwordSlotL then
+					cachedSwordSlotL = i - 1
+				end
+			end
+		end
+	end
+
+	local function getLassoSlot()
+		updateLassyCache()
+		return cachedLassoSlot
+	end
+
+	local function getLassySwordSlot()
+		updateLassyCache()
+		return cachedSwordSlotL
+	end
+
+	local function hasValidLassyTarget()
+		if LassyKillauraTargetCheck.Enabled then
+			return store.KillauraTarget ~= nil
+		end
+
+		local now = tick()
+		if now - lastLassyTargetCheck < LASSY_TARGET_INTERVAL then
+			return lastLassyTargetResult
+		end
+		lastLassyTargetCheck = now
+
+		if not entitylib.isAlive then
+			lastLassyTargetResult = false
+			return false
+		end
+
+		local myPos = entitylib.character.RootPart.Position
+		local myLook = entitylib.character.RootPart.CFrame.LookVector
+		local rangeSquared = AutoLassyRange.Value * AutoLassyRange.Value
+		local fovRad = math_rad(AutoLassyFOV.Value)
+		local myTeam = lplr:GetAttribute('Team')
+
+		for _, entity in entitylib.List do
+			if entity.Player == lplr then continue end
+			if not entity.Character then continue end
+			local rootPart = entity.RootPart
+			if not rootPart then continue end
+
+			if entity.Player then
+				if myTeam == entity.Player:GetAttribute('Team') then continue end
+			else
+				if not entity.Targetable then continue end
+			end
+
+			local pos = rootPart.Position
+			local dx = pos.X - myPos.X
+			local dy = pos.Y - myPos.Y
+			local dz = pos.Z - myPos.Z
+			local distSq = dx * dx + dy * dy + dz * dz
+
+			if distSq > rangeSquared then continue end
+
+			local dist = math.sqrt(distSq)
+			if dist < 0.01 then
+				lastLassyTargetResult = true
+				return true
+			end
+
+			local dot = myLook.X * (dx / dist) + myLook.Y * (dy / dist) + myLook.Z * (dz / dist)
+			local angle = math_acos(math.max(-1, math.min(1, dot)))
+
+			if angle <= fovRad then
+				lastLassyTargetResult = true
+				return true
+			end
+		end
+
+		lastLassyTargetResult = false
+		return false
+	end
+
+	AutoLassy = vape.Categories.Kits:CreateModule({
+		Name = 'AutoLassy',
+		Function = function(callback)
+			if callback then
+				autoLassyEnabled = true
+				lastLassyInvUpdate = 0
+				updateLassyCache()
+
+				task.spawn(function()
+					repeat
+						task.wait(0.15)
+						if not autoLassyEnabled or _G_lassyLock then continue end
+						if not isSword() then continue end
+
+						if LassyFirstPersonCheck.Enabled and not isFirstPerson() then continue end
+
+						local hasTarget = false
+						if LassyKillauraTargetCheck.Enabled then
+							hasTarget = store.KillauraTarget ~= nil
+						else
+							hasTarget = hasValidLassyTarget()
+						end
+
+						if not hasTarget then continue end
+
+						local lassoSlot = getLassoSlot()
+						if not lassoSlot then continue end
+
+						local currentTime = tick()
+						if (currentTime - lastAutoLassyTime) >= AutoLassyInterval.Value then
+							_G_lassyLock = true
+							lastAutoLassyTime = currentTime
+							local originalSlot = store.inventory.hotbarSlot
+
+							task.wait(AutoLassyWaitDelay.Value)
+
+							if hotbarSwitch(lassoSlot) then
+								task.wait(AutoLassySwitchSpeed.Value)
+								mouse1click()
+								task.wait(0.05)
+							end
+
+							local swordSlot = getLassySwordSlot()
+							if swordSlot then
+								hotbarSwitch(swordSlot)
+							else
+								hotbarSwitch(originalSlot)
+							end
+
+							_G_lassyLock = false
+						end
+					until not autoLassyEnabled
+				end)
+			else
+				autoLassyEnabled = false
+				_G_lassyLock = false
+				cachedLassoSlot = nil
+				cachedSwordSlotL = nil
+				lastLassyInvUpdate = 0
+			end
+		end,
+		Tooltip = 'Automatically switches to lasso and uses it when a target is in range'
+	})
+
+	AutoLassyInterval = AutoLassy:CreateSlider({
+		Name = 'Lasso Interval',
+		Min = 0.1,
+		Max = 3,
+		Default = 0.5,
+		Decimal = 10,
+		Suffix = function(val)
+			return val == 1 and 'second' or 'seconds'
+		end,
+		Tooltip = 'How often to auto-use the lasso'
+	})
+
+	AutoLassySwitchSpeed = AutoLassy:CreateSlider({
+		Name = 'Switch Delay',
+		Min = 0,
+		Max = 0.2,
+		Default = 0.05,
+		Decimal = 100,
+		Suffix = 's',
+		Tooltip = 'Delay between switching to lasso and clicking'
+	})
+
+	AutoLassyWaitDelay = AutoLassy:CreateSlider({
+		Name = 'Wait Delay',
+		Min = 0,
+		Max = 1,
+		Default = 0,
+		Decimal = 100,
+		Suffix = 's',
+		Tooltip = 'Delay before swapping to lasso'
+	})
+
+	AutoLassyRange = AutoLassy:CreateSlider({
+		Name = 'Range',
+		Min = 1,
+		Max = 30,
+		Default = 20,
+		Suffix = function(val)
+			return val == 1 and 'stud' or 'studs'
+		end,
+		Tooltip = 'Maximum range to auto-lasso'
+	})
+
+	AutoLassyFOV = AutoLassy:CreateSlider({
+		Name = 'FOV',
+		Min = 1,
+		Max = 180,
+		Default = 90,
+		Tooltip = 'Field of view for target detection (1-180 degrees)'
+	})
+
+	LassyKillauraTargetCheck = AutoLassy:CreateToggle({
+		Name = 'Require Killaura Target',
+		Default = false,
+		Tooltip = 'Only auto-lasso when Killaura has a target (overrides Range/FOV)'
+	})
+
+	LassyFirstPersonCheck = AutoLassy:CreateToggle({
+		Name = 'First Person Only',
+		Default = false,
+		Tooltip = 'Only works in first person mode'
+	})
+
+	vape:Clean(vapeEvents.InventoryChanged.Event:Connect(function()
+		lastLassyInvUpdate = 0
+	end))
 end)
