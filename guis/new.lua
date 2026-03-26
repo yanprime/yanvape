@@ -270,47 +270,531 @@ local function createDownloader(text)
 	end
 end
 
-local function createMobileButton(buttonapi, position)
-	local heldbutton = false
-	local button = Instance.new('TextButton')
-	button.Size = UDim2.fromOffset(40, 40)
-	button.Position = UDim2.fromOffset(position.X, position.Y)
-	button.AnchorPoint = Vector2.new(0.5, 0.5)
-	button.BackgroundColor3 = buttonapi.Enabled and Color3.new(0, 0.7, 0) or Color3.new()
-	button.BackgroundTransparency = 0.5  
-	button.Text = buttonapi.Name
-	button.TextColor3 = Color3.new(1, 1, 1)
-	button.TextScaled = true
-	button.Font = Enum.Font.Gotham
-	button.TextTransparency = 0  
-	button.Parent = mainapi.gui
-	
-	local buttonconstraint = Instance.new('UITextSizeConstraint')
-	buttonconstraint.MaxTextSize = 16
-	buttonconstraint.Parent = button
-	addCorner(button, UDim.new(1, 0))
+local mobileEditorOpen = false
+local mobileEditorBG = nil
+local mobileButtons = {}
+local mobileCloseBtn = nil
+local mobileEditorLabels = {} 
 
-	button.MouseButton1Down:Connect(function()
-		heldbutton = true
-		local holdtime, holdpos = tick(), inputService:GetMouseLocation()
-		repeat
-			heldbutton = (inputService:GetMouseLocation() - holdpos).Magnitude < 6
-			task.wait()
-		until (tick() - holdtime) > 1 or not heldbutton
-		if heldbutton then
-			buttonapi.Bind = {}
-			button:Destroy()
+local function getMobileTextColor(bg)
+	local lum = 0.299 * bg.R + 0.587 * bg.G + 0.114 * bg.B
+	return lum > 0.5 and Color3.new(0, 0, 0) or Color3.new(1, 1, 1)
+end
+
+local function formatModuleName(name)
+	if #name <= 7 then return name end
+	for i = math.ceil(#name / 2), 2, -1 do
+		if name:sub(i, i):match('%u') then
+			return name:sub(1, i - 1) .. '\n' .. name:sub(i)
+		end
+	end
+	local m = math.ceil(#name / 2)
+	return name:sub(1, m) .. '\n' .. name:sub(m + 1)
+end
+
+local function updateMobileButtonColor(btn, enabled)
+	local vapeColor = Color3.fromHSV(mainapi.GUIColor.Hue, mainapi.GUIColor.Sat, mainapi.GUIColor.Value)
+	local bg = enabled and vapeColor or color.Dark(uipallet.Main, -0.08)
+	btn.BackgroundColor3 = bg
+	btn.TextColor3 = getMobileTextColor(bg)
+end
+
+local function setResizeHandlesVisible(data, visible)
+	if data.resizeFrame then
+		data.resizeFrame.Visible = visible
+	end
+end
+
+local function closeMobileEditor()
+	if mobileEditorBG then
+		mobileEditorBG:Destroy()
+		mobileEditorBG = nil
+	end
+	if mobileCloseBtn then
+		mobileCloseBtn:Destroy()
+		mobileCloseBtn = nil
+	end
+	for _, lbl in mobileEditorLabels do
+		if lbl and lbl.Parent then lbl:Destroy() end
+	end
+	table.clear(mobileEditorLabels)
+	for _, data in mobileButtons do
+		data.editorMode = false
+		setResizeHandlesVisible(data, false)
+		if data.closePanel then
+			data.closePanel()
+		end
+	end
+	mobileEditorOpen = false
+end
+
+local function openMobileEditor()
+	if mobileEditorOpen then return end
+	mobileEditorOpen = true
+	clickgui.Visible = false
+	mobileEditorBG = Instance.new('TextButton')
+	mobileEditorBG.Name = 'MobileEditor'
+	mobileEditorBG.Size = UDim2.fromScale(1, 1)
+	mobileEditorBG.BackgroundColor3 = Color3.new(0, 0, 0)
+	mobileEditorBG.BackgroundTransparency = 0.5
+	mobileEditorBG.BorderSizePixel = 0
+	mobileEditorBG.AutoButtonColor = false
+	mobileEditorBG.Text = ''
+	mobileEditorBG.ZIndex = 10
+	mobileEditorBG.Parent = mainapi.gui
+	local editorLabel = Instance.new('TextLabel')
+	editorLabel.Size = UDim2.fromOffset(250, 20)
+	editorLabel.Position = UDim2.fromOffset(14, 12)
+	editorLabel.BackgroundTransparency = 1
+	editorLabel.Text = 'MOBILE BIND EDITOR'
+	editorLabel.TextColor3 = Color3.new(1, 1, 1)
+	editorLabel.TextTransparency = 0.3
+	editorLabel.TextSize = 12
+	editorLabel.TextXAlignment = Enum.TextXAlignment.Left
+	editorLabel.FontFace = uipallet.FontSemiBold
+	editorLabel.ZIndex = 20
+	editorLabel.Parent = mainapi.gui
+	table.insert(mobileEditorLabels, editorLabel)
+	local hintLabel = Instance.new('TextLabel')
+	hintLabel.Size = UDim2.fromOffset(450, 16)
+	hintLabel.Position = UDim2.fromOffset(14, 29)
+	hintLabel.BackgroundTransparency = 1
+	hintLabel.Text = 'Drag to move buttons  •  Corner handles to resize buttons •  Double tap for settings'
+	hintLabel.TextColor3 = Color3.new(1, 1, 1)
+	hintLabel.TextTransparency = 0.55
+	hintLabel.TextSize = 10
+	hintLabel.TextXAlignment = Enum.TextXAlignment.Left
+	hintLabel.FontFace = uipallet.Font
+	hintLabel.ZIndex = 20
+	hintLabel.Parent = mainapi.gui
+	table.insert(mobileEditorLabels, hintLabel)
+
+	mobileCloseBtn = Instance.new('TextButton')
+	mobileCloseBtn.Name = 'MobileEditorClose'
+	mobileCloseBtn.Size = UDim2.fromOffset(44, 44)
+	mobileCloseBtn.AnchorPoint = Vector2.new(1, 0)
+	mobileCloseBtn.Position = UDim2.new(1, -12, 0, 12)
+	mobileCloseBtn.BackgroundTransparency = 1
+	mobileCloseBtn.BorderSizePixel = 0
+	mobileCloseBtn.AutoButtonColor = false
+	mobileCloseBtn.Text = ''
+	mobileCloseBtn.ZIndex = 25
+	mobileCloseBtn.Parent = mainapi.gui
+
+	local xL1 = Instance.new('Frame')
+	xL1.AnchorPoint = Vector2.new(0.5, 0.5)
+	xL1.Size = UDim2.fromOffset(22, 3)
+	xL1.Position = UDim2.fromScale(0.5, 0.5)
+	xL1.BackgroundColor3 = Color3.new(1, 1, 1)
+	xL1.BorderSizePixel = 0
+	xL1.Rotation = 45
+	xL1.ZIndex = 26
+	xL1.Parent = mobileCloseBtn
+	addCorner(xL1, UDim.new(1, 0))
+	local xL2 = xL1:Clone()
+	xL2.Rotation = -45
+	xL2.Parent = mobileCloseBtn
+
+	local function setXCol(c) xL1.BackgroundColor3 = c xL2.BackgroundColor3 = c end
+	mobileCloseBtn.MouseEnter:Connect(function() setXCol(Color3.fromRGB(255, 80, 80)) end)
+	mobileCloseBtn.MouseLeave:Connect(function() setXCol(Color3.new(1,1,1)) end)
+	mobileCloseBtn.MouseButton1Click:Connect(function() closeMobileEditor() end)
+
+	for _, data in mobileButtons do
+		data.editorMode = true
+		setResizeHandlesVisible(data, false)
+		updateMobileButtonColor(data.button, data.module.Enabled)
+	end
+end
+
+local function addMobileButton(moduleapi, savedX, savedY, savedW, savedH, silent)
+	for _, data in mobileButtons do
+		if data.module == moduleapi then return end
+	end
+
+	local vp = workspace.CurrentCamera.ViewportSize
+	local initX = savedX or (vp.X / 2 - 35)
+	local initY = savedY or (vp.Y / 2 - 35)
+	local initW = savedW or 70
+	local initH = savedH or 70
+
+	local btn = Instance.new('TextButton')
+	btn.Size = UDim2.fromOffset(initW, initH)
+	btn.Position = UDim2.fromOffset(initX, initY)
+	btn.BackgroundTransparency = 0
+	btn.BorderSizePixel = 0
+	btn.AutoButtonColor = false
+	btn.Text = formatModuleName(moduleapi.Name)
+	btn.TextScaled = true
+	btn.FontFace = uipallet.FontSemiBold
+	btn.ZIndex = 12
+	btn.Parent = mainapi.gui
+	addCorner(btn, UDim.new(1, 0))
+	updateMobileButtonColor(btn, moduleapi.Enabled)
+
+	local constraint = Instance.new('UITextSizeConstraint')
+	constraint.MaxTextSize = 15
+	constraint.MinTextSize = 7
+	constraint.Parent = btn
+	local resizeFrame = Instance.new('Frame')
+	resizeFrame.Name = 'ResizeFrame'
+	resizeFrame.BackgroundTransparency = 1
+	resizeFrame.BorderSizePixel = 0
+	resizeFrame.ZIndex = 14
+	resizeFrame.Visible = false
+	resizeFrame.Size = UDim2.new(1, 16, 1, 16)
+	resizeFrame.Position = UDim2.fromOffset(-8, -8)
+	resizeFrame.Parent = btn
+
+	local rfStroke = Instance.new('UIStroke')
+	rfStroke.Color = Color3.new(1, 1, 1)
+	rfStroke.Thickness = 1.5
+	rfStroke.Transparency = 0.2
+	rfStroke.Parent = resizeFrame
+
+	local handles = {}
+	for _, ca in {{0,0},{1,0},{0,1},{1,1}} do
+		local h = Instance.new('Frame')
+		h.Size = UDim2.fromOffset(12, 12)
+		h.AnchorPoint = Vector2.new(ca[1], ca[2])
+		h.Position = UDim2.new(ca[1], 0, ca[2], 0)
+		h.BackgroundColor3 = Color3.new(1, 1, 1)
+		h.BorderSizePixel = 0
+		h.ZIndex = 16
+		h.Parent = resizeFrame
+		addCorner(h, UDim.new(0, 2))
+		table.insert(handles, {frame = h, ax = ca[1], ay = ca[2]})
+	end
+
+	local panel = Instance.new('Frame')
+	panel.Name = 'MobileBindPanel'
+	panel.BackgroundColor3 = uipallet.Main
+	panel.BorderSizePixel = 0
+	panel.Size = UDim2.fromOffset(0, 34)
+	panel.AnchorPoint = Vector2.new(0, 0.5)
+	panel.ClipsDescendants = true
+	panel.ZIndex = 20
+	panel.Visible = false
+	panel.Parent = mainapi.gui
+	addCorner(panel, UDim.new(0, 6))
+	addBlur(panel)
+	local connector = Instance.new('Frame')
+	connector.Name = 'MobileBindConnector'
+	connector.BackgroundColor3 = color.Light(uipallet.Main, 0.12)
+	connector.BorderSizePixel = 0
+	connector.Size = UDim2.fromOffset(0, 2)
+	connector.ZIndex = 19
+	connector.Visible = false
+	connector.Parent = mainapi.gui
+	local rowHolder = Instance.new('Frame')
+	rowHolder.BackgroundTransparency = 1
+	rowHolder.Size = UDim2.new(1, -12, 1, 0)
+	rowHolder.Position = UDim2.fromOffset(8, 0)
+	rowHolder.ZIndex = 21
+	rowHolder.Parent = panel
+	local rowList = Instance.new('UIListLayout')
+	rowList.FillDirection = Enum.FillDirection.Horizontal
+	rowList.VerticalAlignment = Enum.VerticalAlignment.Center
+	rowList.HorizontalAlignment = Enum.HorizontalAlignment.Left
+	rowList.Padding = UDim.new(0, 0)
+	rowList.SortOrder = Enum.SortOrder.LayoutOrder
+	rowList.Parent = rowHolder
+	local nameLabel = Instance.new('TextLabel')
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Text = moduleapi.Name
+	nameLabel.TextColor3 = uipallet.Text
+	nameLabel.TextSize = 12
+	nameLabel.FontFace = uipallet.FontSemiBold
+	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+	nameLabel.ZIndex = 21
+	nameLabel.LayoutOrder = 1
+	nameLabel.Size = UDim2.fromOffset(0, 34) 
+	nameLabel.Parent = rowHolder
+	local div1 = Instance.new('Frame')
+	div1.Size = UDim2.fromOffset(1, 20)
+	div1.BackgroundColor3 = color.Light(uipallet.Main, 0.12)
+	div1.BorderSizePixel = 0
+	div1.ZIndex = 21
+	div1.LayoutOrder = 2
+	div1.Parent = rowHolder
+	local modeBtn = Instance.new('TextButton')
+	modeBtn.BackgroundTransparency = 1
+	modeBtn.AutoButtonColor = false
+	modeBtn.Text = moduleapi.KeybindMode
+	modeBtn.TextColor3 = color.Dark(uipallet.Text, 0.16)
+	modeBtn.TextSize = 11
+	modeBtn.FontFace = uipallet.Font
+	modeBtn.ZIndex = 21
+	modeBtn.LayoutOrder = 3
+	modeBtn.Size = UDim2.fromOffset(50, 34)
+	modeBtn.Parent = rowHolder
+	local div2 = div1:Clone()
+	div2.LayoutOrder = 4
+	div2.Parent = rowHolder
+	local removeBtn = Instance.new('TextButton')
+	removeBtn.BackgroundTransparency = 1
+	removeBtn.AutoButtonColor = false
+	removeBtn.Text = 'Remove'
+	removeBtn.TextColor3 = Color3.fromRGB(220, 60, 60)
+	removeBtn.TextSize = 11
+	removeBtn.FontFace = uipallet.Font
+	removeBtn.ZIndex = 21
+	removeBtn.LayoutOrder = 5
+	removeBtn.Size = UDim2.fromOffset(54, 34)
+	removeBtn.Parent = rowHolder
+
+	task.defer(function()
+		local tw = math.ceil(getfontsize(moduleapi.Name, 12, uipallet.FontSemiBold).X) + 4
+		nameLabel.Size = UDim2.fromOffset(tw, 34)
+	end)
+
+	local panelFullW = 54 + 1 + 50 + 1 + 8 
+	local panelOpen = false
+
+	local function repositionPanel()
+		local bx = btn.AbsolutePosition.X
+		local by = btn.AbsolutePosition.Y
+		local bw = btn.AbsoluteSize.X
+		local bh = btn.AbsoluteSize.Y
+		local gap = 8
+
+		local nw = nameLabel.AbsoluteSize.X > 0 and nameLabel.AbsoluteSize.X or (math.ceil(getfontsize(moduleapi.Name, 12, uipallet.FontSemiBold).X) + 4)
+		panelFullW = nw + 1 + 50 + 1 + 54 + 16
+		nameLabel.Size = UDim2.fromOffset(nw, 34)
+
+		panel.Position = UDim2.fromOffset(bx + bw + gap, by + bh/2 - 17)
+		panel.Size = UDim2.fromOffset(panelFullW, 34)
+
+		connector.Size = UDim2.fromOffset(gap, 2)
+		connector.Position = UDim2.fromOffset(bx + bw, by + bh/2 - 1)
+	end
+
+	local function openPanel()
+		if panelOpen then return end
+		panelOpen = true
+		repositionPanel()
+		panel.Size = UDim2.fromOffset(0, 34)
+		panel.Visible = true
+		connector.Visible = true
+		tween:Tween(panel, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			Size = UDim2.fromOffset(panelFullW, 34)
+		})
+	end
+
+	local function closePanel()
+		if not panelOpen then return end
+		panelOpen = false
+		tween:Tween(panel, TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+			Size = UDim2.fromOffset(0, 34)
+		})
+		task.delay(0.15, function()
+			if not panelOpen then
+				panel.Visible = false
+				connector.Visible = false
+			end
+		end)
+	end
+
+	local data = {
+		module = moduleapi,
+		button = btn,
+		resizeFrame = resizeFrame,
+		settingsPanel = panel,
+		settingsOpen = false,
+		editorMode = silent ~= true,
+		closePanel = closePanel,
+	}
+	table.insert(mobileButtons, data)
+
+	if mobileEditorOpen then
+		for _, d in mobileButtons do
+			d.editorMode = true
+		end
+	end
+
+	modeBtn.MouseButton1Click:Connect(function()
+		moduleapi.KeybindMode = (moduleapi.KeybindMode == 'Toggle') and 'Hold' or 'Toggle'
+		moduleapi.HoldCount = 0
+		modeBtn.Text = moduleapi.KeybindMode
+	end)
+	modeBtn.MouseEnter:Connect(function()
+		modeBtn.TextColor3 = uipallet.Text
+	end)
+	modeBtn.MouseLeave:Connect(function()
+		modeBtn.TextColor3 = color.Dark(uipallet.Text, 0.16)
+	end)
+
+	removeBtn.MouseButton1Click:Connect(function()
+		closePanel()
+		task.delay(0.15, function()
+			for i, d in mobileButtons do
+				if d.module == moduleapi then
+					if d.resizeConn then d.resizeConn:Disconnect() end
+					if d.resizeEndConn then d.resizeEndConn:Disconnect() end
+					table.remove(mobileButtons, i)
+					break
+				end
+			end
+			panel:Destroy()
+			connector:Destroy()
+			btn:Destroy()
+		end)
+	end)
+	removeBtn.MouseEnter:Connect(function()
+		removeBtn.TextColor3 = Color3.fromRGB(255, 90, 90)
+	end)
+	removeBtn.MouseLeave:Connect(function()
+		removeBtn.TextColor3 = Color3.fromRGB(220, 60, 60)
+	end)
+
+	local resizing = false
+	local resizeStartMouse, resizeStartSize, resizeStartPos = nil, nil, nil
+	local resizeAnchorX, resizeAnchorY = 0, 0
+
+	for _, h in handles do
+		h.frame.InputBegan:Connect(function(input)
+			if not data.editorMode then return end
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				resizing = true
+				resizeStartMouse = Vector2.new(input.Position.X, input.Position.Y)
+				resizeStartSize = Vector2.new(btn.AbsoluteSize.X, btn.AbsoluteSize.Y)
+				resizeStartPos = Vector2.new(btn.AbsolutePosition.X, btn.AbsolutePosition.Y)
+				resizeAnchorX = h.ax
+				resizeAnchorY = h.ay
+			end
+		end)
+	end
+
+	local resizeConn = inputService.InputChanged:Connect(function(input)
+		if not resizing then return end
+		if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then return end
+		local delta = Vector2.new(input.Position.X, input.Position.Y) - resizeStartMouse
+		local dw = resizeAnchorX == 0 and -delta.X or delta.X
+		local dh = resizeAnchorY == 0 and -delta.Y or delta.Y
+		local newW = math.clamp(resizeStartSize.X + dw, 44, 220)
+		local newH = math.clamp(resizeStartSize.Y + dh, 44, 220)
+		local newX = resizeStartPos.X + (resizeAnchorX == 0 and (resizeStartSize.X - newW) or 0)
+		local newY = resizeStartPos.Y + (resizeAnchorY == 0 and (resizeStartSize.Y - newH) or 0)
+		btn.Size = UDim2.fromOffset(newW, newH)
+		btn.Position = UDim2.fromOffset(newX, newY)
+		if panelOpen then repositionPanel() end
+	end)
+
+	local resizeEndConn = inputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			resizing = false
 		end
 	end)
-	button.MouseButton1Up:Connect(function()
-		heldbutton = false
-	end)
-	button.MouseButton1Click:Connect(function()
-		buttonapi:Toggle()
-		button.BackgroundColor3 = buttonapi.Enabled and Color3.new(0, 0.7, 0) or Color3.new()
+
+	local dragging = false
+	local dragStart, startPos = nil, nil
+	local dragMoveConn, dragEndConn = nil, nil
+
+	btn.InputBegan:Connect(function(input)
+		if not data.editorMode then return end
+		if resizing then return end
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = Vector2.new(input.Position.X, input.Position.Y)
+			startPos = btn.Position
+			if dragMoveConn then dragMoveConn:Disconnect() end
+			if dragEndConn then dragEndConn:Disconnect() end
+			dragMoveConn = inputService.InputChanged:Connect(function(inp)
+				if not dragging or not data.editorMode or resizing then return end
+				if inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch then
+					local delta = Vector2.new(inp.Position.X, inp.Position.Y) - dragStart
+					btn.Position = UDim2.fromOffset(startPos.X.Offset + delta.X, startPos.Y.Offset + delta.Y)
+					if panelOpen then repositionPanel() end
+				end
+			end)
+			dragEndConn = inputService.InputEnded:Connect(function(inp)
+				if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+					dragging = false
+					if dragMoveConn then dragMoveConn:Disconnect(); dragMoveConn = nil end
+					if dragEndConn then dragEndConn:Disconnect(); dragEndConn = nil end
+				end
+			end)
+		end
 	end)
 
-	buttonapi.Bind = {Button = button}
+	local lastClickTime = 0
+	local holdActive = false
+
+	btn.MouseButton1Click:Connect(function()
+		if resizing then return end
+		local now = tick()
+
+		if data.editorMode then
+			if now - lastClickTime < 0.4 then
+				if panelOpen then
+					closePanel()
+					resizeFrame.Visible = false
+				else
+					for _, d in mobileButtons do
+						if d ~= data and d.settingsPanel and d.settingsPanel.Visible then
+							tween:Tween(d.settingsPanel, TweenInfo.new(0.14, Enum.EasingStyle.Quad), {Size = UDim2.fromOffset(0, 34)})
+							task.delay(0.15, function() if d.settingsPanel then d.settingsPanel.Visible = false end end)
+						end
+					end
+					openPanel()
+					resizeFrame.Visible = true
+				end
+			end
+			lastClickTime = now
+		else
+			if moduleapi.KeybindMode == 'Toggle' then
+				moduleapi:Toggle()
+				updateMobileButtonColor(btn, moduleapi.Enabled)
+			end
+		end
+	end)
+
+	btn.InputBegan:Connect(function(input)
+		if data.editorMode then return end
+		if resizing then return end
+		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+		if moduleapi.KeybindMode ~= 'Hold' then return end
+		holdActive = true
+		moduleapi:SetEnabled(true)
+		updateMobileButtonColor(btn, true)
+	end)
+
+	btn.InputEnded:Connect(function(input)
+		if data.editorMode then return end
+		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+		if moduleapi.KeybindMode ~= 'Hold' then return end
+		if holdActive then
+			holdActive = false
+			moduleapi:SetEnabled(false)
+			updateMobileButtonColor(btn, false)
+		end
+	end)
+
+	mainapi:Clean(inputService.InputBegan:Connect(function(inp)
+		if resizing then return end
+		if not panelOpen then return end
+		if inp.UserInputType ~= Enum.UserInputType.MouseButton1 and inp.UserInputType ~= Enum.UserInputType.Touch then return end
+		local pos = inp.Position
+		local function inBounds(obj)
+			if not obj or not obj.Parent then return false end
+			local a = obj.AbsolutePosition
+			local s = obj.AbsoluteSize
+			return pos.X >= a.X and pos.X <= a.X + s.X and pos.Y >= a.Y and pos.Y <= a.Y + s.Y
+		end
+		if not inBounds(btn) and not inBounds(panel) then
+			closePanel()
+			resizeFrame.Visible = false
+		end
+	end))
+
+	data.resizeConn = resizeConn
+	data.resizeEndConn = resizeEndConn
+end
+
+local function createMobileButton(moduleapi, position, savedW, savedH)
+	local sx = position and position.X or nil
+	local sy = position and position.Y or nil
+	addMobileButton(moduleapi, sx, sy, savedW, savedH, true) 
 end
 
 local function downloadFile(path, func)
@@ -4084,7 +4568,9 @@ function mainapi:CreateCategory(categorysettings)
 
 		function moduleapi:SetBind(tab, mouse)
 			if tab.Mobile then
-				createMobileButton(moduleapi, Vector2.new(tab.X, tab.Y))
+				if inputService.TouchEnabled then
+					createMobileButton(moduleapi, Vector2.new(tab.X, tab.Y), tab.W, tab.H)
+				end
 				return
 			end
 
@@ -4209,8 +4695,26 @@ function mainapi:CreateCategory(categorysettings)
 			bind.Visible = #moduleapi.Bind > 0 or hovered or modulechildren.Visible
 			pinbutton.Visible = hovered or modulechildren.Visible or moduleapi.Pinned
 		end)
+		local mbHolding = false
+		if inputService.TouchEnabled then
+		modulebutton.MouseButton1Down:Connect(function()
+			mbHolding = true
+			local holdStart = tick()
+			repeat task.wait(0.05) until not mbHolding or (tick() - holdStart) >= 0.7
+			if mbHolding and (tick() - holdStart) >= 0.7 then
+				mbHolding = false
+				openMobileEditor()
+				addMobileButton(moduleapi)
+			end
+		end)
+		modulebutton.MouseButton1Up:Connect(function()
+			mbHolding = false
+		end)
+		end
 		modulebutton.MouseButton1Click:Connect(function()
-			moduleapi:Toggle()
+			if not mobileEditorOpen then
+				moduleapi:Toggle()
+			end
 		end)
 		modulebutton.MouseButton2Click:Connect(function()
 			modulechildren.Visible = not modulechildren.Visible
@@ -5812,9 +6316,9 @@ function mainapi:Load(skipgui, profile)
 				end
 				object:Toggle(true)
 			end
-			object:SetBind(v.Bind)
 			object.KeybindMode = v.KeybindMode or "Toggle"
-			object.HoldCount = 0   
+			object.HoldCount = 0
+			object:SetBind(v.Bind)
 			object.Object.Bind.Visible = #v.Bind > 0
 			if v.Pinned and not object.Pinned then
 				local pinButton = object.Object:FindFirstChild('Pin')
@@ -5951,9 +6455,25 @@ function mainapi:Save(newprofile)
 	end
 
 	for i, v in self.Modules do
+		local mobileSave = nil
+		for _, mbData in mobileButtons do
+			if mbData.module == v then
+				local btn = mbData.button
+				if btn and btn.Parent then
+					mobileSave = {
+						Mobile = true,
+						X = btn.Position.X.Offset,
+						Y = btn.Position.Y.Offset,
+						W = btn.Size.X.Offset,
+						H = btn.Size.Y.Offset,
+					}
+				end
+				break
+			end
+		end
 		savedata.Modules[i] = {
 			Enabled = v.Enabled,
-			Bind = v.Bind.Button and {Mobile = true, X = v.Bind.Button.Position.X.Offset, Y = v.Bind.Button.Position.Y.Offset} or v.Bind,
+			Bind = mobileSave or (v.Bind.Button and {Mobile = true, X = v.Bind.Button.Position.X.Offset, Y = v.Bind.Button.Position.Y.Offset} or v.Bind),
 			Options = mainapi:SaveOptions(v, true),
 			Pinned = v.Pinned or false,
 			KeybindMode = v.KeybindMode or "Toggle"   
@@ -6024,7 +6544,7 @@ function mainapi:Uninject()
 	shared.vape = nil
 	shared.vapereload = nil
 	shared.VapeIndependent = nil
-	shared.vape_running = nil -- Clear the flag
+	shared.vape_running = nil 
 end
 
 gui = Instance.new('ScreenGui')
@@ -8062,6 +8582,12 @@ function mainapi:UpdateGUI(hue, sat, val, default)
 					option:Color(hue, sat, val, rainbow)
 				end
 			end
+		end
+	end
+
+	for _, data in mobileButtons do
+		if data.button and data.button.Parent then
+			updateMobileButtonColor(data.button, data.module.Enabled)
 		end
 	end
 end
