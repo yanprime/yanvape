@@ -163,6 +163,15 @@ local function addCorner(parent, radius)
 	return corner
 end
 
+local function safecall(func, ...)
+	local args = {...}
+	xpcall(function()
+		func(unpack(args))
+	end, function(err)
+		warn(err,'-WM: AeroV4')
+	end)
+end
+
 local function addCloseButton(parent, offset)
 	local close = Instance.new('ImageButton')
 	close.Name = 'Close'
@@ -1381,7 +1390,7 @@ components = {
 				})
 			end
 		
-			optionsettings.Function(self.Hue, self.Sat, self.Value, self.Opacity)
+			safecall(optionsettings.Function, self.Hue, self.Sat, self.Value, self.Opacity)
 		end
 		
 		function optionapi:Toggle()
@@ -1584,7 +1593,7 @@ components = {
 				dropdownchildren = nil
 				dropdown.Size = UDim2.new(1, 0, 0, 40)
 			end
-			optionsettings.Function(self.Value, mouse)
+			safecall(optionsettings.Function, self.Value, mouse)
 		end
 		
 		button.MouseButton1Click:Connect(function()
@@ -1672,12 +1681,12 @@ components = {
 				fontbox.Object.Visible = val == 'Custom' and fontdropdown.Object.Visible
 				if val ~= 'Custom' then
 					optionapi.Value = Font.fromEnum(Enum.Font[val])
-					optionsettings.Function(optionapi.Value)
+					safecall(optionsettings.Function, optionapi.Value)
 				else
 					pcall(function()
 						optionapi.Value = Font.fromId(tonumber(fontbox.Value))
 					end)
-					optionsettings.Function(optionapi.Value)
+					safecall(optionsettings.Function, optionapi.Value)
 				end
 			end,
 			Darker = optionsettings.Darker,
@@ -1692,7 +1701,7 @@ components = {
 					pcall(function()
 						optionapi.Value = Font.fromId(tonumber(fontbox.Value))
 					end)
-					optionsettings.Function(optionapi.Value)
+					safecall(optionsettings.Function, optionapi.Value)
 				end
 			end,
 			Visible = false,
@@ -1819,7 +1828,7 @@ components = {
 			})
 			valuebutton.Text = self.Value..(optionsettings.Suffix and ' '..(type(optionsettings.Suffix) == 'function' and optionsettings.Suffix(self.Value) or optionsettings.Suffix) or '')
 			if check or final then
-				optionsettings.Function(value, final)
+				safecall(optionsettings.Function, value, final)
 			end
 		end
 		
@@ -2054,7 +2063,7 @@ components = {
 					text = text == 'none' and 'behind walls' or text..', behind walls'
 				end
 				items.Text = 'Ignore '..text
-				optionsettings.Function()
+				safecall(optionsettings.Function)
 			end
 		}, window, {Options = {}})
 		optionapi.Invisible.Object.Position = UDim2.fromOffset(0, 81)
@@ -2069,7 +2078,7 @@ components = {
 					text = text == 'none' and 'behind walls' or text..', behind walls'
 				end
 				items.Text = 'Ignore '..text
-				optionsettings.Function()
+				safecall(optionsettings.Function)
 			end
 		}, window, {Options = {}})
 		optionapi.Walls.Object.Position = UDim2.fromOffset(0, 111)
@@ -2170,7 +2179,7 @@ components = {
 				tooltipicon.ImageColor3 = uipallet.Text
 				tooltipicon.Parent = optionsettings.IconParent
 			end
-			optionsettings.Function(self.Enabled)
+			safecall(optionsettings.Function, self.Enabled)
 		end
 		
 		targetbutton.MouseEnter:Connect(function()
@@ -2263,7 +2272,7 @@ components = {
 		function optionapi:SetValue(val, enter)
 			self.Value = val
 			box.Text = val
-			optionsettings.Function(enter)
+			safecall(optionsettings.Function, enter)
 		end
 		
 		textbox.MouseButton1Click:Connect(function()
