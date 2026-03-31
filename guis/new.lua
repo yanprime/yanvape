@@ -10,7 +10,7 @@ local mainapi = {
 	Loaded = false,
 	Libraries = {},
 	Modules = {},
-	Place = game.PlaceId,
+    Place = game.PlaceId,
 	Profile = 'default',
 	Profiles = {},
 	RainbowSpeed = {Value = 1},
@@ -3784,6 +3784,7 @@ function mainapi:CreateGUI()
 		label.Parent = bind
 
 		function optionapi:SetBind(tab)
+			if not tab then return end
 			mainapi.Keybind = #tab <= 0 and mainapi.Keybind or table.clone(tab)
 			self.Bind = mainapi.Keybind
 			if mainapi.VapeButton then
@@ -5653,7 +5654,8 @@ function mainapi:CreateCategoryList(categorysettings)
 	childrentwo.BackgroundTransparency = 1
 	childrentwo.BackgroundColor3 = color.Dark(uipallet.Main, 0.02)
 	childrentwo.Visible = false
-	childrentwo.Parent = children
+	childrentwo.Position = UDim2.fromOffset(0, 35)
+	childrentwo.Parent = window
 	local settings = Instance.new('ImageButton')
 	settings.Name = 'Settings'
 	settings.Size = UDim2.fromOffset(16, 16)
@@ -5680,8 +5682,12 @@ function mainapi:CreateCategoryList(categorysettings)
 	local windowlisttwo = Instance.new('UIListLayout')
 	windowlisttwo.SortOrder = Enum.SortOrder.LayoutOrder
 	windowlisttwo.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	windowlisttwo.Padding = UDim.new(0, 3)
+	windowlisttwo.Padding = UDim.new(0, 2)
 	windowlisttwo.Parent = childrentwo
+	local childrentwopadding = Instance.new('UIPadding')
+	childrentwopadding.PaddingTop = UDim.new(0, 4)
+	childrentwopadding.PaddingBottom = UDim.new(0, 4)
+	childrentwopadding.Parent = childrentwo
 	local addbkg = Instance.new('Frame')
 	addbkg.Name = 'Add'
 	addbkg.Size = UDim2.fromOffset(200, 35)
@@ -5716,7 +5722,7 @@ function mainapi:CreateCategoryList(categorysettings)
 	addbutton.ImageTransparency = 0.3
 	addbutton.Parent = addbkg
 	local cursedpadding = Instance.new('Frame')
-	cursedpadding.Size = UDim2.fromOffset(0, 5)
+	cursedpadding.Size = UDim2.fromOffset(0, 2)
 	cursedpadding.BackgroundTransparency = 1
 	cursedpadding.Parent = children
 	cursedpadding.LayoutOrder = -1
@@ -6038,6 +6044,11 @@ function mainapi:CreateCategoryList(categorysettings)
 		arrow.Rotation = self.Expanded and 0 or 180
 		window.Size = UDim2.fromOffset(220, self.Expanded and math.min(51 + windowlist.AbsoluteContentSize.Y / scale.Scale, 611) or 45)
 		divider.Visible = children.CanvasPosition.Y > 10 and children.Visible
+		if not self.Expanded then
+			childrentwo.Visible = false
+			cursedpadding.Size = UDim2.fromOffset(0, 2)
+		end
+		settings.Visible = self.Expanded
 	end
 
 	function categoryapi:GetValue(name)
@@ -6105,6 +6116,7 @@ function mainapi:CreateCategoryList(categorysettings)
 	end)
 	settings.MouseButton1Click:Connect(function()
 		childrentwo.Visible = not childrentwo.Visible
+		cursedpadding.Size = childrentwo.Visible and UDim2.fromOffset(0, 65) or UDim2.fromOffset(0, 2)
 	end)
 	window.InputBegan:Connect(function(inputObj)
 		if inputObj.Position.Y < window.AbsolutePosition.Y + 41 and inputObj.UserInputType == Enum.UserInputType.MouseButton2 then
@@ -6899,7 +6911,9 @@ function mainapi:Load(skipgui, profile)
 				object.ListEnabled = v.ListEnabled or {}
 				object:ChangeValue()
 			end
-			object.Object.Position = UDim2.fromOffset(v.Position.X, v.Position.Y)
+			if v.Position then
+				object.Object.Position = UDim2.fromOffset(v.Position.X, v.Position.Y)
+			end
 		end
 
 		for i, v in savedata.Modules do
@@ -7056,7 +7070,7 @@ end
 
 function mainapi:Save(newprofile)
     if mainapi.ThreadFix then setthreadidentity(8) end
-    if not self.Loaded then return end
+    if self.Loaded == nil then return end
 	local guidata = {
 		Categories = {},
 		Profile = newprofile or self.Profile,
@@ -7436,9 +7450,9 @@ local function getPremadeProfiles()
 	
 	for _, file in pairs(listfiles('newvape/profiles/premade')) do
 		local fileName = file:gsub('\\', '/'):match('.*/(.+)%.txt$')
-		if fileName and fileName:find(currentGame) then
-			local profileName = fileName:gsub(currentGame, ''):gsub('^(.-)$', '%1')
-			if profileName ~= '' then
+		if fileName then
+			local profileName = fileName:match('^(.+)'..currentGame..'$')
+			if profileName and profileName ~= '' then
 				table.insert(premades, profileName)
 			end
 		end
@@ -8008,10 +8022,37 @@ local function refreshPremadeWindow()
 			})
 		end)
 		
+		local confirmingDupe = false
 		loadButton.MouseButton1Click:Connect(function()
 			local premadeFile = 'newvape/profiles/premade/'..profileName..mainapi.Place..'.txt'
 			
 			if isfile(premadeFile) then
+				if profilesCategory:GetValue(profileName) then
+					if confirmingDupe then return end
+					confirmingDupe = true
+					local origText = loadButton.Text
+					local origColor = loadButton.BackgroundColor3
+					loadButton.Text = 'Already Loaded!'
+					loadButton.BackgroundColor3 = Color3.fromRGB(220, 120, 30)
+					task.wait(1.2)
+					loadButton.Text = 'Load Again?'
+					loadButton.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+					local confirmed = false
+					local conn
+					conn = loadButton.MouseButton1Click:Connect(function()
+						confirmed = true
+						conn:Disconnect()
+					end)
+					task.wait(2.5)
+					conn:Disconnect()
+					confirmingDupe = false
+					if not confirmed then
+						loadButton.Text = origText
+						loadButton.BackgroundColor3 = origColor
+						return
+					end
+				end
+
 				loadButton.Text = 'Loading...'
 				loadButton.BackgroundColor3 = color.Dark(accentColor, 0.3)
 				
@@ -8023,6 +8064,10 @@ local function refreshPremadeWindow()
 				while profilesCategory:GetValue(newProfileName) do
 					newProfileName = profileName .. '_' .. counter
 					counter = counter + 1
+				end
+				
+				if isfile('newvape/profiles/'..profileName..mainapi.Place..'.txt') and delfile then
+					pcall(function() delfile('newvape/profiles/'..profileName..mainapi.Place..'.txt') end)
 				end
 				
 				local premadeData = readfile(premadeFile)
@@ -8041,14 +8086,14 @@ local function refreshPremadeWindow()
 				premadeWindow.Visible = false
 				premadeBlocker.Visible = false
 				
-				mainapi:CreateNotification('Profile Created', 'Created new profile: '..newProfileName, 3, 'info')
+				mainapi:CreateNotification('config Swapped', 'dropped the old \''..profileName..'\' and reloaded it fresh fr', 3, 'info')
 			else
 				loadButton.Text = 'Error!'
 				loadButton.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
 				task.wait(1)
 				loadButton.Text = 'Load'
 				loadButton.BackgroundColor3 = accentColor
-				mainapi:CreateNotification('Error', 'Config file not found!', 3, 'alert')
+				mainapi:CreateNotification('Error', 'config file not found!', 3, 'alert')
 			end
 		end)
 	end
@@ -8061,6 +8106,58 @@ local function refreshPremadeWindow()
 	end)
 end
 
+profilesCategory:CreateButton({
+	Name = 'Reset Profile',
+	Function = function()
+		for _, v in mainapi.Modules do
+			if v.Enabled then
+				pcall(function() v:Toggle() end)
+			end
+			pcall(function() v:SetBind({}, true) end)
+			v.Bind = {}
+			if v.Object and v.Object:FindFirstChild('Bind') then
+				local bindtext = v.Object.Bind:FindFirstChildOfClass('TextLabel')
+				if bindtext then bindtext.Text = '' bindtext.Visible = false end
+				local bindicon = v.Object.Bind:FindFirstChildOfClass('ImageLabel')
+				if bindicon then bindicon.Visible = true end
+				v.Object.Bind.Visible = false
+			end
+		end
+		for _, v in mainapi.Legit.Modules do
+			if v.Enabled then
+				pcall(function() v:Toggle() end)
+			end
+		end
+		for _, v in mainapi.Categories do
+			if v.Type == 'Overlay' and v.Button and v.Button.Enabled then
+				pcall(function() v.Button:Toggle() end)
+			end
+			if v.Options then
+				for _, opt in v.Options do
+					pcall(function()
+						if opt.Load and opt.Default ~= nil then
+							opt:Load(opt.Default)
+						end
+					end)
+				end
+			end
+		end
+		for _, v in mainapi.Modules do
+			if v.Options then
+				for _, opt in v.Options do
+					pcall(function()
+						if opt.Load and opt.Default ~= nil then
+							opt:Load(opt.Default)
+						end
+					end)
+				end
+			end
+		end
+		mainapi:Save()
+		mainapi:CreateNotification('Profile Reset', 'everything wiped', 3, 'alert')
+	end,
+	Tooltip = 'Wipes all module states and settings back to default'
+})
 profilesCategory:CreateButton({
 	Name = 'Browse Preset Configs',
 	Function = function()
@@ -9255,6 +9352,10 @@ mainapi:Clean(inputService.InputBegan:Connect(function(inputObj)
 			for _, v in mainapi.Windows do
 				v.Visible = false
 			end
+			if premadeWindow.Visible then
+				premadeWindow.Visible = false
+				premadeBlocker.Visible = false
+			end
 			clickgui.Visible = not clickgui.Visible
 			tooltip.Visible = false
 			mainapi:BlurCheck()
@@ -9268,7 +9369,7 @@ mainapi:Clean(inputService.InputBegan:Connect(function(inputObj)
 		local toggled = false
 		for i, v in mainapi.Modules do
 			if type(v.Bind) == 'table' and v.Bind.Mobile then
-				-- skip mobile‑only binds on desktop
+				-- skip 
 			else
 				if checkKeybinds(mainapi.HeldKeybinds, v.Bind, inputObj.KeyCode.Name) then
 					if v.KeybindMode == "Hold" then
