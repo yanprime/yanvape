@@ -2800,6 +2800,7 @@ run(function()
         local CPS
         local BlockCPS = {}
         local Thread
+        local Draggable
 
         local function getSafeCPS()
             if store.hand and store.hand.toolType == 'block' and BlockCPS and BlockCPS.GetRandomValue then
@@ -2876,10 +2877,14 @@ run(function()
                     end
 
                     AutoClicker:Clean(inputService.TouchStarted:Connect(function(input, gameProcessed)
-                        AutoClick()
+                        if Draggable and Draggable.Enabled then
+                            AutoClick()
+                        end
                     end))
                     AutoClicker:Clean(inputService.TouchEnded:Connect(function(input, gameProcessed)
-                        StopClick()
+                        if Draggable and Draggable.Enabled then
+                            StopClick()
+                        end
                     end))
                 else
                     StopClick()
@@ -2913,6 +2918,12 @@ run(function()
             DefaultMin = 12,
             DefaultMax = 12,
             Darker = true
+        })
+
+        Draggable = AutoClicker:CreateToggle({
+            Name = 'Draggable',
+            Default = true,
+            Tooltip = 'When enabled, touching anywhere on screen triggers autoclicker'
         })
 
         task.defer(function()
