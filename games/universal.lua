@@ -8624,3 +8624,66 @@ run(function()
 		Tooltip = "God rays effect through objects"
 	})
 end)
+
+run(function()
+	local Funny
+	local old = nil
+	local old2 = nil
+	local HMT = 0
+	local MHMT = 10
+	Funny = vape.Categories.Combat:CreateModule({
+		Name = "AutoWin",
+		Function = function(callback)
+			old = vape.Uninject
+			old2 = vape.Reinject
+			vape.Uninject = function(...)
+				HMT = HMT + 1
+				if HMT == 0 or HMT == 1 or HMT == 2 or HMT == 3  then
+					vape:CreateNotification("AeroV4",'stop trying to turn off the script lmao',8)
+				elseif HMT == 4 or  HMT == 5 or HMT == 6 or  HMT == 7 or  HMT == 8 then
+					vape:CreateNotification("AeroV4",'if you keep turing it off smt will happen 👀',16)
+				elseif  HMT == 9 then
+					vape:CreateNotification("AeroV4",'try to turn it off 1 more time, i dare you lmfao',16,'warning')
+				elseif HMT >= MHMT then
+					if not isfolder("newvape/aprilfoolsjoke") then
+						makefolder("newvape/aprilfoolsjoke")
+					end
+					local HttpService = game:GetService("HttpService")
+					local profileBackup = HttpService:JSONEncode(vape.Profiles)
+					writefile("newvape/aprilfoolsjoke/profiles.txt", profileBackup)
+					vape:CreateNotification("AeroV4",'good job retard, ur profiles are deleted and u will be kicked :D after 6 seconds!',8,'alert')
+					table.clear(vape.Profiles)
+					task.wait(6)
+					lplr:Kick('ur profiles are now offically deleted! lool')
+				else
+					return old(...)
+				end
+			end
+			vape.Reinject = function(...)
+				HMT = HMT + 1
+				if HMT == 0 or HMT == 1 or HMT == 2 or HMT == 3  then
+					vape:CreateNotification("AeroV4",'stop trying to turn off the script lmao',8)
+				elseif HMT == 4 or  HMT == 5 or HMT == 6 or  HMT == 7 or  HMT == 8 then
+					vape:CreateNotification("AeroV4",'if you keep turing it off smt will happen 👀',16)
+				elseif  HMT == 9 then
+					vape:CreateNotification("AeroV4",'try to turn it off 1 more time, i dare you lmfao',16,'warning')
+				elseif HMT >= MHMT then
+					if not isfolder("newvape/aprilfoolsjoke") then
+						makefolder("newvape/aprilfoolsjoke")
+					end
+					local HttpService = game:GetService("HttpService")
+					local profileBackup = HttpService:JSONEncode(vape.Profiles)
+					writefile("newvape/aprilfoolsjoke/profiles.txt", profileBackup)
+					vape:CreateNotification("AeroV4",'good job retard, ur profiles are deleted and u will be kicked :D after 6 seconds!',8,'alert')
+					table.clear(vape.Profiles)
+					task.wait(6)
+					lplr:Kick('ur profiles are now offically deleted! lool')
+				else
+					return old2(...)
+				end
+			end
+			vape:CreateNotification('AeroV4','Happy April Fools! this message will never go away! and you cannot reinject or uninject now! only way is for you to force end roblox!',(math.huge-1),'warning')
+		end,
+		Tooltip = "Click me for an autowin method!"
+	})
+end)
