@@ -1,3 +1,4 @@
+--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local run = function(func)
     local ok, err = pcall(func)
     if not ok then
@@ -3068,7 +3069,7 @@ run(function()
         ["davey"] = "rbxassetid://9155464612",
         ["warlock"] = "rbxassetid://15186338366",
         ["ember"] = "rbxassetid://9630017904",
-        ["black_market_trader"] = "rbxassetid://18922642482",
+        ["black_market_trader"] = "rbxassetid://9630017904",
         ["yeti"] = "rbxassetid://9166205917",
         ["scarab"] = "rbxassetid://137137517627492",
         ["defender"] = "rbxassetid://131690429591874",
@@ -5516,12 +5517,7 @@ run(function()
         if not projectiles[NEWFastHitsUsage] then NEWFastHitsUsage = 1 end
         if projectiles and projectiles[NEWFastHitsUsage] and canShootNEW(projectiles[NEWFastHitsUsage]) then
             local item, ammo, projectile, itemMeta = unpack(projectiles[NEWFastHitsUsage])
-            local projSpeed = itemMeta.launchVelocity or 100
-            local gravity = itemMeta.gravitationalAcceleration or 196.2
-            local calc = prediction.SolveTrajectory(pos, projSpeed, gravity, ent.RootPart.Position, ent.RootPart.Velocity, workspace.Gravity, ent.HipHeight, ent.Jumping and 42.6 or nil, nil)
-            if calc then
-                shootFuncNEW(item, ammo, projectile, itemMeta, pos, ent)
-            end
+            shootFuncNEW(item, ammo, projectile, itemMeta, pos, ent)
         end
     end
 
@@ -6629,8 +6625,14 @@ run(function()
         Tooltip = 'Deals more damage quicker using projectiles',
         Default = false,
         Function = function(call)
+            Legit.Object.Visible = call
             FireRate.Object.Visible = call
         end
+    })
+    Legit = Killaura:CreateToggle({
+        Name = 'Legit Switch',
+        Darker = true,
+        Visible = false,
     })
     FireRate = Killaura:CreateSlider({
         Name = 'Fire rate',
@@ -7323,15 +7325,6 @@ run(function()
 	CameraDir = LongJump:CreateToggle({
 		Name = 'Camera Direction'
 	})
-end)
-	
-run(function()
-    local NoFall
-
-    NoFall = vape.Categories.Blatant:CreateModule({
-        Name = 'NoFall',
-        Tooltip = 'PATCHED'
-    })
 end)
 
 run(function()
@@ -8620,6 +8613,31 @@ run(function()
         Tooltip = 'Only works in first person mode'
     })
 
+    HitsRequiredToggle = AutoShoot:CreateToggle({
+        Name = 'Hits Required',
+        Default = false,
+        Tooltip = 'Require a certain number of hits on the same target before AutoShoot activates',
+        Function = function(callback)
+            if HitsRequiredSlider then HitsRequiredSlider.Object.Visible = callback end
+            if not callback then
+                currentHitTarget = nil
+                currentTrackedEntity = nil
+                currentHitCount = 0
+                activationReady = false
+                lastHitTime = 0
+            end
+        end
+    })
+
+    HitsRequiredSlider = AutoShoot:CreateSlider({
+        Name = 'Hits Needed',
+        Min = 1,
+        Max = 10,
+        Default = 2,
+        Tooltip = 'Number of consecutive hits on the same target required before AutoShoot will work',
+        Visible = false
+    })
+
     vape:Clean(vapeEvents.InventoryChanged.Event:Connect(function()
         lastInventoryUpdate = 0
     end))
@@ -9875,7 +9893,7 @@ run(function()
         ["davey"] = "rbxassetid://9155464612",
         ["warlock"] = "rbxassetid://15186338366",
         ["ember"] = "rbxassetid://9630017904",
-        ["black_market_trader"] = "rbxassetid://18922642482",
+        ["black_market_trader"] = "rbxassetid://9630017904",
         ["yeti"] = "rbxassetid://9166205917",
         ["scarab"] = "rbxassetid://137137517627492",
         ["defender"] = "rbxassetid://131690429591874",
@@ -35224,7 +35242,7 @@ run(function()
 				old3 = bedwars.AbilityController.setProgress
 				bedwars.AbilityController.addProgress = function(p1,p2,p3)
 					if p2 == 'elk_mounted' then
-						p1:setProgress(p2, math.huge)
+						p1:setProgress(p2, math.huge-2)
 					else
 						return old(p1,p2,p3)
 					end
@@ -35323,3 +35341,50 @@ run(function()
 		Tooltip = 'Enables Roblox legacy animation blending'
 	})
 end)
+
+run(function()
+	local InfiniteMilo
+	local old,old2,old3 = nil,nil,nil
+	InfiniteMilo = vape.Categories.Kits:CreateModule({
+		Name = "InfiniteMilo",
+		Tooltip = 'infinfinf!!',
+		Function = function(callback)
+			if callback then
+				old = bedwars.AbilityController.addProgress
+				old2 = bedwars.AbilityController.getProgress
+				old3 = bedwars.AbilityController.setProgress
+				bedwars.AbilityController.addProgress = function(p1,p2,p3)
+					if p2 == 'MIMIC_BLOCK_HIDDEN' then
+						p1:setProgress(p2, math.huge-2)
+					else
+						return old(p1,p2,p3)
+					end
+				end
+				bedwars.AbilityController.getProgress = function(p1,p2)
+					if p2 == 'MIMIC_BLOCK_HIDDEN' then
+						return math.huge
+					else
+						return old2(p1,p2)
+					end
+				end
+				bedwars.AbilityController.setProgress = function(p1,p2,p3)
+					if p2 == 'MIMIC_BLOCK_HIDDEN' then
+						p3 = math.huge
+						return old3(p1,math.huge,p3)
+					else
+						return old3(p1,p2,p3)
+					end
+				end
+			else
+				bedwars.AbilityController.addProgress = old
+				bedwars.AbilityController.getProgress = old2
+				bedwars.AbilityController.setProgress = old3
+				old = nil
+				old2 = nil
+				old3 = nil
+			end
+		end
+	})
+end)
+
+s
