@@ -1,4 +1,3 @@
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local run = function(func)
     local ok, err = pcall(func)
     if not ok then
@@ -3069,7 +3068,7 @@ run(function()
         ["davey"] = "rbxassetid://9155464612",
         ["warlock"] = "rbxassetid://15186338366",
         ["ember"] = "rbxassetid://9630017904",
-        ["black_market_trader"] = "rbxassetid://9630017904",
+        ["black_market_trader"] = "rbxassetid://18922642482",
         ["yeti"] = "rbxassetid://9166205917",
         ["scarab"] = "rbxassetid://137137517627492",
         ["defender"] = "rbxassetid://131690429591874",
@@ -9893,7 +9892,7 @@ run(function()
         ["davey"] = "rbxassetid://9155464612",
         ["warlock"] = "rbxassetid://15186338366",
         ["ember"] = "rbxassetid://9630017904",
-        ["black_market_trader"] = "rbxassetid://9630017904",
+        ["black_market_trader"] = "rbxassetid://18922642482",
         ["yeti"] = "rbxassetid://9166205917",
         ["scarab"] = "rbxassetid://137137517627492",
         ["defender"] = "rbxassetid://131690429591874",
@@ -35386,5 +35385,4 @@ run(function()
 		end
 	})
 end)
-
 
