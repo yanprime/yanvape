@@ -23,7 +23,7 @@ local mainapi = {
 	Windows = {}
 }
 
-local profileId = game.PlaceId == 6872265039 and game.PlaceId or game.GameId
+local profileId = game.GameId
 local cloneref = cloneref or function(obj)
 	return obj
 end
@@ -215,6 +215,7 @@ local function addMaid(object)
         end
     end
 end
+addMaid(mainapi)
 
 local function addTooltip(gui, text)
 	if not text then return end
