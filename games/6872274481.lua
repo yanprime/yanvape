@@ -11737,20 +11737,6 @@ run(function()
 				bedwars.FishingMinigameController.startMinigame = old
 			end)
 		end,
-		sorcerer = function()
-			local r = Legit.Enabled and 12 or 16
-			kitCollection('alchemy_crystal', function(v)
-				bedwars.Client:Get(remotes.CollectCollectableEntity):SendToServer({id = v:GetAttribute("Id"), collectableName = v.Name})
-				
-				task.wait(0.1)
-				
-				if not v or not v.Parent then
-					pcall(function() bedwars.GameAnimationUtil:playAnimation(lplr, bedwars.AnimationType.PUNCH) end)
-					pcall(function() bedwars.ViewmodelController:playAnimation(bedwars.AnimationType.FP_USE_ITEM) end)
-					pcall(function() bedwars.SoundManager:playSound(bedwars.SoundList.CROP_HARVEST) end)
-				end
-			end, r, false)
-		end,
 		davey = function()
 			local old = bedwars.CannonHandController.launchSelf
 			bedwars.CannonHandController.launchSelf = function(...)
@@ -36615,6 +36601,18 @@ run(function()
             end
         end
     end
+
+	local function getPickaxeSlot()
+		for i, v in pairs(store.inventory.hotbar) do
+			if v.item and bedwars.ItemMeta[v.item.itemType] then
+				local meta = bedwars.ItemMeta[v.item.itemType]
+				if meta.breakBlock then
+					return i - 1
+				end
+			end
+		end
+		return nil
+	end
 
     BetterDavey = vape.Categories.Kits:CreateModule({
         Name = "BetterDavey",
