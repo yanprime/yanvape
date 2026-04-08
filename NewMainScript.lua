@@ -1,8 +1,6 @@
 local _args = ...
 local _isPaidUser = type(_args) == 'table' and _args.Username and _args.Password
-if _isPaidUser then
-    getgenv().AeroLocalPaid = true
-end
+getgenv().AeroLocalPaid = _isPaidUser and true or false
 local isfile = isfile or function(file)
 	local suc, res = pcall(function()
 		return readfile(file)
@@ -126,32 +124,34 @@ if not shared.VapeDeveloper then
 		end
 	end)
 
-	if not _isPaidUser then
-		local paidSuc, paidRes = pcall(function()
-			return game:HttpGet('https://raw.githubusercontent.com/poopparty/whitelistcheck/main/WhitelistAcc.json', true)
+	pcall(function()
+		if isfile('newvape/profiles/paid_accounts.txt') then
+			delfile('newvape/profiles/paid_accounts.txt')
+		end
+	end)
+	local paidSuc, paidRes = pcall(function()
+		return game:HttpGet('https://raw.githubusercontent.com/poopparty/whitelistcheck/main/WhitelistAcc.json', true)
+	end)
+	if paidSuc and paidRes and paidRes ~= '404: Not Found' then
+		local jsonService = game:GetService('HttpService')
+		local ok, data = pcall(function()
+			return jsonService:JSONDecode(paidRes)
 		end)
-
-		if paidSuc and paidRes and paidRes ~= '404: Not Found' then
-			local jsonService = game:GetService('HttpService')
-			local ok, data = pcall(function()
-				return jsonService:JSONDecode(paidRes)
-			end)
-
-			if ok and data and data.accounts then
-				local ids = {}
-				for _, id in ipairs(data.accounts) do
-					if tonumber(id) and tonumber(id) ~= 0 then
-						table.insert(ids, tostring(id))
-					end
+		if ok and data and data.accounts then
+			local ids = {}
+			for _, id in data.accounts do
+				if tonumber(id) and tonumber(id) ~= 0 then
+					table.insert(ids, tostring(id))
 				end
-				if #ids > 0 then
-					writefile('newvape/profiles/paid_accounts.txt', table.concat(ids, '\n'))
-				end
+			end
+			if #ids > 0 then
+				writefile('newvape/profiles/paid_accounts.txt', table.concat(ids, '\n'))
 			end
 		end
 	end
 end
 
 return loadstring(downloadFile('newvape/main.lua'), 'main')({
-    Username = shared.ValidatedUsername
+    Username = shared.ValidatedUsername,
+    Password = args and args.Password or nil
 })
