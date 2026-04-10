@@ -122,7 +122,7 @@ end
 
 local guiFunc, guiErr = loadstring(downloadFile('newvape/guis/' .. gui .. '.lua'), 'gui')
 if not guiFunc then
-    error('[AEROV4] Failed to load GUI: ' .. tostring(guiErr))
+    error('[yanv4] Failed to load GUI: ' .. tostring(guiErr))
 end
 vape = guiFunc()
 if not vape then
