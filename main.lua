@@ -97,7 +97,7 @@ local function finishLoading()
 				teleportScript = 'shared.ValidatedUsername = "'..shared.ValidatedUsername..'"\n'..teleportScript
 			end
 			local _ok, _err = pcall(function() vape:Save() end)
-			if not _ok then warn('[AEROV4] save failed before teleport: ' .. tostring(_err)) end
+			if not _ok then warn('[yanv4] save failed before teleport: ' .. tostring(_err)) end
 			queue_on_teleport(teleportScript)
 		end
 	end))
@@ -126,14 +126,14 @@ if not guiFunc then
 end
 vape = guiFunc()
 if not vape then
-    error('[AEROV4] GUI returned nil file may be corrupted try deleting newvape/guis/' .. gui .. '.lua and reinjecting.')
+    error('[yanv4] GUI returned nil file may be corrupted try deleting newvape/guis/' .. gui .. '.lua and reinjecting.')
 end
 if not vape.Load then
     if delfile then pcall(function() delfile('newvape/guis/' .. gui .. '.lua') end) end
-    error('[AEROV4] gui file corrupted (missing load) reinject..')
+    error('[yanv4] gui file corrupted (missing load) reinject..')
 end
 if not vape.Init and not vape.Load then
-    error('[AEROV4] failed to initialize properly reinject to fix this bs')
+    error('[yanv4] failed to initialize properly reinject to fix this bs')
 end
 shared.vape = vape
 task.wait(0.1)
